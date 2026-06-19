@@ -22,6 +22,8 @@ import java.util.Optional;
 public class FilterStorage {
     private static final Logger LOGGER = LogManager.getLogger(FilterStorage.class);
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static ItemStack cachedFilterItem = null;
+    private static boolean cacheLoaded = false;
     
     private static Path getFilterPath() {
         return Paths.get("config", "auto_reroll", "filter.json");
@@ -104,8 +106,40 @@ public class FilterStorage {
             Files.writeString(path, jsonContent);
             LOGGER.info("Saved filter item to {}", path);
             
+            // Update cache
+            cachedFilterItem = filterStack.copy();
+            cacheLoaded = true;
+            
         } catch (IOException e) {
             LOGGER.error("Failed to save filter item to {}: {}", path, e.getMessage());
+        }
+    }
+    
+    public static ItemStack getFilterItem() {
+        if (!cacheLoaded) {
+                Optional<ItemStack> loaded = loadFilterItem();
+            if (loaded.isPresent()) {
+                cachedFilterItem = loaded.get();
+            }
+            cacheLoaded = true;
+        }
+        return cachedFilterItem != null ? cachedFilterItem : ItemStack.EMPTY;
+    }
+    
+    public static void clearFilterItem() {
+        Path path = getFilterPath();
+        
+        try {
+            Files.createDirectories(path.getParent());
+            Files.writeString(path, "{}");
+            LOGGER.info("Cleared filter from {}", path);
+            
+            // Clear cache
+            cachedFilterItem = null;
+            cacheLoaded = false;
+            
+        } catch (IOException e) {
+            LOGGER.error("Failed to clear filter from {}: {}", path, e.getMessage());
         }
     }
 }

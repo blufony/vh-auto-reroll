@@ -1,37 +1,42 @@
 package dev.blufony.autoreroll.client.mixin;
 
+import dev.blufony.autoreroll.client.AutoRerollManager;
+import dev.blufony.autoreroll.client.gui.IconButtonElement;
+import dev.blufony.autoreroll.util.FilterStorage;
+import dev.blufony.autoreroll.util.ItemMatcher;
+import iskallia.vault.VaultMod;
+import iskallia.vault.client.atlas.TextureAtlasRegion;
+import iskallia.vault.client.data.ClientExpertiseData;
+import iskallia.vault.client.data.ClientShardTradeData;
+import iskallia.vault.client.gui.framework.element.ButtonElement;
+import iskallia.vault.client.gui.framework.element.FakeItemSlotElement;
+import iskallia.vault.client.gui.framework.element.spi.ElementStore;
+import iskallia.vault.client.gui.framework.render.Tooltips;
+import iskallia.vault.client.gui.framework.render.TooltipDirection;
+import iskallia.vault.client.gui.framework.spatial.Spatials;
+import iskallia.vault.container.inventory.ShardTradeContainer;
+import iskallia.vault.init.ModNetwork;
+import iskallia.vault.init.ModSounds;
+import iskallia.vault.init.ModTextureAtlases;
+import iskallia.vault.network.message.ServerboundResetBlackMarketTradesMessage;
+import iskallia.vault.skill.prestige.BlackMarketRerollsPrestigePowerPower;
+import iskallia.vault.skill.base.Skill;
+import iskallia.vault.skill.base.TieredSkill;
+import iskallia.vault.skill.expertise.type.BlackMarketExpertise;
+import iskallia.vault.skill.prestige.helper.PrestigeHelper;
+import iskallia.vault.skill.tree.PrestigeTree;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.TextComponent;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.registries.ForgeRegistries;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import iskallia.vault.client.gui.framework.ScreenTextures;
-import iskallia.vault.client.gui.framework.element.ButtonElement;
-import iskallia.vault.client.gui.framework.element.spi.ElementStore;
-import iskallia.vault.client.gui.framework.render.Tooltips;
-import iskallia.vault.client.gui.framework.spatial.Spatials;
-import iskallia.vault.client.atlas.TextureAtlasRegion;
-import iskallia.vault.init.ModTextureAtlases;
-import iskallia.vault.VaultMod;
-import iskallia.vault.container.inventory.ShardTradeContainer;
-import iskallia.vault.client.data.ClientExpertiseData;
-import iskallia.vault.client.data.ClientShardTradeData;
-import iskallia.vault.skill.base.TieredSkill;
-import iskallia.vault.skill.expertise.type.BlackMarketExpertise;
-import iskallia.vault.skill.tree.PrestigeTree;
-import iskallia.vault.skill.prestige.helper.PrestigeHelper;
-import iskallia.vault.skill.prestige.BlackMarketRerollsPrestigePowerPower;
-import iskallia.vault.skill.base.Skill;
-import dev.blufony.autoreroll.client.AutoRerollManager;
-import dev.blufony.autoreroll.client.gui.IconButtonElement;
-import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.TextComponent;
-import net.minecraft.sounds.SoundSource;
-import iskallia.vault.init.ModNetwork;
-import iskallia.vault.init.ModSounds;
-import iskallia.vault.network.message.ServerboundResetBlackMarketTradesMessage;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -179,6 +184,7 @@ public abstract class ShardTradeScreenMixin {
             ButtonElement<?> resetButton = (ButtonElement<?>) guiElements.get(resetButtonIndex);
             modifyButtonClick(resetButton);
             addAutoRerollButton(store, resetButton);
+            addFilterSlot(store);
             
         } catch (Exception e) {
             System.err.println("[AutoReroll] Error during button modification: " + e.getMessage());
@@ -283,13 +289,18 @@ public abstract class ShardTradeScreenMixin {
                 AUTO_REROLL_BUTTON_TEXTURES,
                 () -> {
                     Minecraft mc = Minecraft.getInstance();
-                    if (mc.screen != null && mc.screen.hasShiftDown()) {
+                    
+                    if (mc.player == null || mc.screen == null) {
+                        return;
+                    }
+                    
+                    ItemStack carriedItem = mc.player.containerMenu.getCarried();
+                    
+                    if (mc.screen.hasShiftDown()) {
                         System.out.println("[AutoReroll] Shift-click action configured");
                     } else {
-                        // Send reset packet
                         ModNetwork.CHANNEL.sendToServer(ServerboundResetBlackMarketTradesMessage.INSTANCE);
                         
-                        // Play sound
                         if (mc.level != null && mc.player != null) {
                             mc.level.playSound(
                                 mc.player,
@@ -303,7 +314,6 @@ public abstract class ShardTradeScreenMixin {
                             );
                         }
                         
-                        // Start auto-reroll (no resume handler needed for button click)
                         AutoRerollManager.start(() -> {});
                     }
                 }
@@ -329,6 +339,65 @@ public abstract class ShardTradeScreenMixin {
             
         } catch (Exception e) {
             System.err.println("[AutoReroll] Error adding auto-reroll button: " + e.getMessage());
+        }
+    }
+    
+    private void addFilterSlot(ElementStore store) {
+        try {
+            // Position: centered below "Black Market", above random trade slot
+            int posX = 29;
+            int posY = 21;
+            
+            FakeItemSlotElement<?> filterSlot = new FakeItemSlotElement<>(
+                Spatials.positionXY(posX, posY),
+                () -> {
+                    ItemStack filterItem = FilterStorage.getFilterItem();
+                    return filterItem != null && !filterItem.isEmpty() ? filterItem : ItemStack.EMPTY;
+                },
+                () -> false // Always enabled
+            )
+            .layout((screen, gui, parent, world) -> world.translateXY(gui))
+            .whenClicked(isDisabled -> {
+                Minecraft mc = Minecraft.getInstance();
+                
+                if (mc.player == null) {
+                    return;
+                }
+                
+                ItemStack carriedItem = mc.player.containerMenu.getCarried();
+                
+                if (!carriedItem.isEmpty() && ItemMatcher.isVaultFilterItem(carriedItem)) {
+                    FilterStorage.saveFilterItem(carriedItem);
+                    mc.player.displayClientMessage(
+                        new TextComponent("[AutoReroll] Filter slot updated!"),
+                        true
+                    );
+                } else {
+                    // Clear filter if clicking with empty hand or non-filter item
+                    FilterStorage.clearFilterItem();
+                    mc.player.displayClientMessage(
+                        new TextComponent("[AutoReroll] Filter cleared!"),
+                        true
+                    );
+                }
+            })
+            .tooltip((tooltipRenderer, poseStack, mouseX, mouseY, tooltipFlag) -> {
+                ItemStack filterItem = FilterStorage.getFilterItem();
+                
+                if (filterItem != null && !filterItem.isEmpty()) {
+                    tooltipRenderer.renderTooltip(poseStack, filterItem, mouseX, mouseY, TooltipDirection.RIGHT);
+                } else {
+                    // Show tooltip when empty
+                    tooltipRenderer.renderTooltip(poseStack, new TextComponent("Click to save filter"), mouseX, mouseY, TooltipDirection.RIGHT);
+                }
+                
+                return true;
+            });
+            
+            store.addElement(filterSlot);
+            
+        } catch (Exception e) {
+            System.err.println("[AutoReroll] Error adding filter slot: " + e.getMessage());
         }
     }
 }
