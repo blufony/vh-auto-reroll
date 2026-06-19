@@ -66,6 +66,7 @@ public class FilterStorage {
             if (json.has("simple")) {
                 simpleMode = json.get("simple").getAsBoolean();
             } else {
+                simpleMode = !itemStr.equals("create:attribute_filter") && !itemStr.equals("create:list_filter");
             }
             
             ItemStack filterStack = new ItemStack(item);
@@ -149,6 +150,7 @@ public class FilterStorage {
         ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(stack.getItem());
         if (itemId == null) return false;
         String idString = itemId.toString();
+        return !idString.equals("create:attribute_filter") && !idString.equals("create:list_filter");
     }
     
     public static void clearFilterItem() {
