@@ -200,7 +200,7 @@ public abstract class ShardTradeScreenMixin {
                     try {
                         if (!AutoRerollManager.isRunning()) {
                             originalOnClick.accept(btn);
-                            AutoRerollManager.start();
+                            AutoRerollManager.start(() -> {});
                         }
                     } catch (Exception e) {
                         System.err.println("[AutoReroll] Error in shift-click handler: " + e.getMessage());
@@ -303,8 +303,8 @@ public abstract class ShardTradeScreenMixin {
                             );
                         }
                         
-                        // Start auto-reroll
-                        AutoRerollManager.start();
+                        // Start auto-reroll (no resume handler needed for button click)
+                        AutoRerollManager.start(() -> {});
                     }
                 }
             );

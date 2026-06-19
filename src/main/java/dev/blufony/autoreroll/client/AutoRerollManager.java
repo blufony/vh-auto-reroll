@@ -1,15 +1,19 @@
 package dev.blufony.autoreroll.client;
 
 import dev.blufony.autoreroll.config.AutoRerollConfig;
+import dev.blufony.autoreroll.util.FilterStorage;
 import dev.blufony.autoreroll.util.ItemMatcher;
 import iskallia.vault.network.message.ShardTradeMessage;
+import net.minecraft.client.Minecraft;
 import net.minecraft.util.Tuple;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.common.Mod;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -18,31 +22,31 @@ import java.util.stream.Stream;
 
 @Mod.EventBusSubscriber(modid = "auto_reroll", bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class AutoRerollManager {
+    private static final org.apache.logging.log4j.Logger LOGGER = org.apache.logging.log4j.LogManager.getLogger();
+    
     private static boolean isRunning = false;
     private static int currentRerollCount = 0;
     private static boolean cancelRequested = false;
-    private static List<? extends String> generalTargets;
-    private static List<? extends String> boosterPackTargets;
-    private static List<? extends String> inscriptionTargets;
+    private static Optional<ItemStack> filterItemStack = Optional.empty();
+    private static Runnable resumeHandler;
+    private static long pauseBetweenRerollsMs;
     private static ScheduledExecutorService scheduler;
-    
-    public static synchronized void start() {
+
+    public static synchronized void start(Runnable onResume) {
         if (isRunning) {
             return;
         }
         
-        generalTargets = AutoRerollConfig.GENERAL_TARGETS.get();
-        boosterPackTargets = AutoRerollConfig.BOOSTER_PACK_TARGETS.get();
-        inscriptionTargets = AutoRerollConfig.INSCRIPTION_TARGETS.get();
-        
-        if ((generalTargets == null || generalTargets.isEmpty()) &&
-            (boosterPackTargets == null || boosterPackTargets.isEmpty()) &&
-            (inscriptionTargets == null || inscriptionTargets.isEmpty())) {
+        filterItemStack = FilterStorage.loadFilterItem();
+        if (filterItemStack.isEmpty()) {
+            LOGGER.info("No valid filter item configured, auto-reroll disabled");
             return;
         }
         
         ensureSchedulerShutdown();
         
+        resumeHandler = onResume;
+        pauseBetweenRerollsMs = AutoRerollConfig.PAUSE_BETWEEN_REROLLS_MS.get();
         isRunning = true;
         currentRerollCount = 0;
         cancelRequested = false;
@@ -52,6 +56,8 @@ public class AutoRerollManager {
             t.setDaemon(true);
             return t;
         });
+        
+        LOGGER.info("Auto-reroll started with filter: {}", filterItemStack.get().getItem());
     }
     
     public static synchronized void stop() {
@@ -65,14 +71,18 @@ public class AutoRerollManager {
         currentRerollCount = 0;
         
         ensureSchedulerShutdown();
+        
+        if (resumeHandler != null) {
+            resumeHandler.run();
+            resumeHandler = null;
+        }
+        
+        LOGGER.info("Auto-reroll stopped after {} rerolls", finalCount);
     }
     
     private static synchronized void ensureSchedulerShutdown() {
         if (scheduler != null) {
             List<Runnable> cancelledTasks = scheduler.shutdownNow();
-            if (!cancelledTasks.isEmpty()) {
-                // Cancelled tasks noted
-            }
             try {
                 if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
                     scheduler.shutdownNow();
@@ -92,21 +102,26 @@ public class AutoRerollManager {
         
         currentRerollCount++;
         
+        if (currentRerollCount > 1 && pauseBetweenRerollsMs > 0) {
+            scheduler.schedule(() -> sendResetRequest(), pauseBetweenRerollsMs, TimeUnit.MILLISECONDS);
+            return;
+        }
+        
         iskallia.vault.init.ModNetwork.CHANNEL.sendToServer(
             iskallia.vault.network.message.ServerboundResetBlackMarketTradesMessage.INSTANCE
         );
     }
     
     public static synchronized void onServerResponse(ShardTradeMessage message) {
-        if (cancelRequested || !isRunning) {
+        if (cancelRequested || !isRunning || filterItemStack.isEmpty()) {
             return;
         }
         
         Map<Integer, Tuple<ItemStack, Integer>> availableTrades = message.getAvailableTrades();
-        long delay = AutoRerollConfig.PAUSE_BETWEEN_REROLLS_MS.get();
+        Level level = Minecraft.getInstance().level;
         
         scheduler.schedule(() -> {
-            if (cancelRequested || !isRunning) {
+            if (cancelRequested || !isRunning || filterItemStack.isEmpty()) {
                 return;
             }
             
@@ -125,26 +140,20 @@ public class AutoRerollManager {
                     
                     ItemStack item = trade.getA();
                     
-                    var allTargets = Stream.concat(
-                        Stream.concat(generalTargets.stream(), boosterPackTargets.stream()),
-                        inscriptionTargets.stream()
-                    ).collect(Collectors.toList());
-                    
-                    boolean isMatch = ItemMatcher.matchesWithNbt(item, allTargets);
-                    
-                    if (isMatch) {
+                    if (ItemMatcher.matchesWithFilter(item, filterItemStack.get(), level)) {
                         foundMatch = true;
                         break;
                     }
                 }
                 
                 if (foundMatch) {
+                    LOGGER.info("Found matching trade after {} rerolls", currentRerollCount);
                     stop();
                     return;
                 }
                 
                 if (currentRerollCount >= AutoRerollConfig.MAX_REROLLS.get()) {
-                    int maxRerolls = AutoRerollConfig.MAX_REROLLS.get();
+                    LOGGER.info("Max rerolls ({}) reached without finding match", AutoRerollConfig.MAX_REROLLS.get());
                     stop();
                     return;
                 }
@@ -152,12 +161,10 @@ public class AutoRerollManager {
                 scheduleNextCycle();
                 
             } catch (Exception e) {
-                System.err.println("[AutoReroll] [ERROR] Exception during trade check:");
-                e.printStackTrace();
-                System.err.println("[AutoReroll] [ERROR] Error message: " + e.getMessage());
+                LOGGER.error("Exception during trade check:", e);
                 stop();
             }
-        }, delay, TimeUnit.MILLISECONDS);
+        }, pauseBetweenRerollsMs, TimeUnit.MILLISECONDS);
     }
     
     private static void scheduleNextCycle() {

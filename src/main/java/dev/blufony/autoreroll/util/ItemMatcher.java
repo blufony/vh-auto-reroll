@@ -1,127 +1,51 @@
 package dev.blufony.autoreroll.util;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.TagParser;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.util.List;
+import java.lang.reflect.Method;
 
 public class ItemMatcher {
     private static final Logger LOGGER = LogManager.getLogger(ItemMatcher.class);
-    private static final Gson GSON = new Gson();
-
-    public static class TargetEntry {
-        ResourceLocation itemId;
-        CompoundTag nbtData;
-
-        public TargetEntry(ResourceLocation itemId) {
-            this.itemId = itemId;
-            this.nbtData = null;
-        }
-
-        public TargetEntry(ResourceLocation itemId, CompoundTag nbtData) {
-            this.itemId = itemId;
-            this.nbtData = nbtData;
-        }
-
-        public boolean matchesNbt(ItemStack stack) {
-            if (this.nbtData == null || this.nbtData.isEmpty()) {
-                return true;
-            }
-
-            CompoundTag stackTag = stack.getTag();
-            if (stackTag == null && this.nbtData.isEmpty()) {
-                return true;
-            }
-            if (stackTag == null) {
-                return false;
-            }
-
-            for (String key : this.nbtData.getAllKeys()) {
-                if (!stackTag.contains(key)) {
-                    return false;
-                }
-                var targetTag = this.nbtData.get(key);
-                var stackTagValue = stackTag.get(key);
-
-                if (targetTag.getClass() != stackTagValue.getClass()) {
-                    return false;
-                }
-
-                if (!targetTag.equals(stackTagValue)) {
-                    return false;
-                }
-            }
-
-            return true;
+    
+    private static Method checkFilterMethod;
+    private static boolean initialized = false;
+    private static boolean available = false;
+    
+    private static void init() {
+        if (initialized) return;
+        initialized = true;
+        
+        try {
+            Class<?> vfTestsClass = Class.forName("net.joseph.vaultfilters.VFTests");
+            checkFilterMethod = vfTestsClass.getMethod(
+                "checkFilter", 
+                ItemStack.class, Object.class, boolean.class, Level.class
+            );
+            available = true;
+            LOGGER.info("Vault-Filters integration loaded successfully");
+        } catch (ClassNotFoundException e) {
+            LOGGER.warn("Vault-Filters mod not found, filter matching unavailable");
+        } catch (NoSuchMethodException e) {
+            LOGGER.warn("Vault-Filters checkFilter method not found: {}", e.getMessage());
         }
     }
-
-    public static boolean matches(ItemStack stack, List<ResourceLocation> targets) {
-        ResourceLocation itemId = stack.getItem().builtInRegistryHolder().key().location();
-        return targets.contains(itemId);
-    }
-
-    public static boolean matchesWithNbt(ItemStack stack, List<String> targets) {
-        ResourceLocation itemId = stack.getItem().builtInRegistryHolder().key().location();
-
-        for (String target : targets) {
-            try {
-                TargetEntry entry = parseTarget(target);
-                if (entry.itemId.equals(itemId) && entry.matchesNbt(stack)) {
-                    return true;
-                }
-            } catch (Exception e) {
-                LOGGER.warn("Failed to parse target entry '{}': {}", target, e.getMessage());
-            }
+    
+    public static boolean matchesWithFilter(ItemStack stack, ItemStack filterStack, Level level) {
+        init();
+        
+        if (!available || checkFilterMethod == null) {
+            return false;
         }
-
-        return false;
-    }
-
-    private static TargetEntry parseTarget(String target) {
-        if (target.startsWith("{") || target.startsWith("[")) {
-            try {
-                JsonElement json = GSON.fromJson(target, JsonElement.class);
-                if (json instanceof JsonObject obj) {
-                    String idStr = obj.get("item").getAsString();
-                    ResourceLocation itemId = new ResourceLocation(idStr);
-
-                    CompoundTag nbtData = null;
-                    if (obj.has("nbt") && !obj.get("nbt").isJsonNull()) {
-                        String nbtString = obj.get("nbt").getAsString();
-                        nbtData = TagParser.parseTag(nbtString);
-                    }
-
-                    return new TargetEntry(itemId, nbtData);
-                }
-            } catch (Exception e) {
-                LOGGER.warn("Failed to parse JSON target '{}': {}", target, e.getMessage());
-            }
-            return null;
+        
+        try {
+            Object result = checkFilterMethod.invoke(null, stack, filterStack, true, level);
+            return (Boolean) result;
+        } catch (Exception e) {
+            LOGGER.warn("Failed to invoke VFTests.checkFilter: {}", e.getMessage());
+            return false;
         }
-
-        int nbtStart = target.indexOf('{');
-        if (nbtStart > 0) {
-            String idPart = target.substring(0, nbtStart).trim();
-            String nbtPart = target.substring(nbtStart);
-
-            try {
-                CompoundTag nbtData = TagParser.parseTag(nbtPart);
-                ResourceLocation itemId = new ResourceLocation(idPart);
-                return new TargetEntry(itemId, nbtData);
-            } catch (Exception e) {
-                LOGGER.warn("Failed to parse NBT in target '{}': {}", target, e.getMessage());
-            }
-            return null;
-        }
-
-        return new TargetEntry(new ResourceLocation(target));
     }
 }
