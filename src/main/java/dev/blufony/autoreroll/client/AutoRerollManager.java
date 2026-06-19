@@ -3,10 +3,10 @@ package dev.blufony.autoreroll.client;
 import dev.blufony.autoreroll.config.AutoRerollConfig;
 import dev.blufony.autoreroll.util.FilterStorage;
 import dev.blufony.autoreroll.util.ItemMatcher;
+import dev.blufony.autoreroll.util.NotifyUtil;
 import iskallia.vault.network.message.ShardTradeMessage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.TextComponent;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Tuple;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -157,60 +157,20 @@ public class AutoRerollManager {
                 
                 if (foundMatch) {
                     LOGGER.info("Found matching trade after {} rerolls", currentRerollCount);
-                    
-                    Minecraft mc = Minecraft.getInstance();
-                    if (mc.player != null) {
-                        mc.execute(() -> {
-                            mc.player.displayClientMessage(
-                                new TextComponent("[AutoReroll] Auto-Reroll Succeeded!"),
-                                true
-                            );
-                            
-                            if (mc.level != null) {
-                                mc.level.playSound(
-                                    mc.player,
-                                    mc.player.getX(),
-                                    mc.player.getY(),
-                                    mc.player.getZ(),
-                                    iskallia.vault.init.ModSounds.VAULT_CHEST_OMEGA_OPEN,
-                                    SoundSource.BLOCKS,
-                                    0.75F,
-                                    1.0F
-                                );
-                            }
-                        });
-                    }
-                    
+                    NotifyUtil.notifyPlayer(
+                        "[AutoReroll] Auto-Reroll Succeeded!",
+                        iskallia.vault.init.ModSounds.VAULT_CHEST_OMEGA_OPEN
+                    );
                     stop();
                     return;
                 }
                 
                 if (currentRerollCount >= AutoRerollConfig.MAX_REROLLS.get()) {
                     LOGGER.info("Max rerolls ({}) reached without finding match", AutoRerollConfig.MAX_REROLLS.get());
-                    
-                    Minecraft mc = Minecraft.getInstance();
-                    if (mc.player != null) {
-                        mc.execute(() -> {
-                            mc.player.displayClientMessage(
-                                new TextComponent("[AutoReroll] Failed to find target after " + AutoRerollConfig.MAX_REROLLS.get() + " rerolls"),
-                                true
-                            );
-                            
-                            if (mc.level != null) {
-                                mc.level.playSound(
-                                    mc.player,
-                                    mc.player.getX(),
-                                    mc.player.getY(),
-                                    mc.player.getZ(),
-                                    iskallia.vault.init.ModSounds.BOOSTER_PACK_FAIL_SFX,
-                                    SoundSource.BLOCKS,
-                                    0.75F,
-                                    1.0F
-                                );
-                            }
-                        });
-                    }
-                    
+                    NotifyUtil.notifyPlayer(
+                        "[AutoReroll] Failed to find target after " + AutoRerollConfig.MAX_REROLLS.get() + " rerolls",
+                        iskallia.vault.init.ModSounds.BOOSTER_PACK_FAIL_SFX
+                    );
                     stop();
                     return;
                 }

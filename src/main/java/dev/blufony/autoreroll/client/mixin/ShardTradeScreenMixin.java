@@ -6,6 +6,7 @@ import dev.blufony.autoreroll.config.AutoRerollConfig;
 import dev.blufony.autoreroll.client.gui.IconButtonElement;
 import dev.blufony.autoreroll.util.FilterStorage;
 import dev.blufony.autoreroll.util.ItemMatcher;
+import dev.blufony.autoreroll.util.NotifyUtil;
 import com.simibubi.create.foundation.config.ui.ConfigScreen;
 import com.simibubi.create.foundation.config.ui.SubMenuConfigScreen;
 import iskallia.vault.VaultMod;
@@ -32,7 +33,6 @@ import iskallia.vault.skill.tree.PrestigeTree;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.TextComponent;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -285,19 +285,7 @@ public abstract class ShardTradeScreenMixin {
                     }
                     
                     ModNetwork.CHANNEL.sendToServer(ServerboundResetBlackMarketTradesMessage.INSTANCE);
-                        
-                        if (mc.level != null && mc.player != null) {
-                            mc.level.playSound(
-                                mc.player,
-                                mc.player.getX(),
-                                mc.player.getY(),
-                                mc.player.getZ(),
-                                ModSounds.SKILL_TREE_LEARN_SFX,
-                                SoundSource.BLOCKS,
-                                0.75F,
-                                1.0F
-                            );
-                        }
+                    NotifyUtil.playSound(ModSounds.SKILL_TREE_LEARN_SFX);
                         
                         AutoRerollManager.start(() -> {});
                 }
@@ -365,16 +353,10 @@ public abstract class ShardTradeScreenMixin {
                 
                 if (!carriedItem.isEmpty()) {
                     FilterStorage.saveFilterItem(carriedItem);
-                    mc.player.displayClientMessage(
-                        new TextComponent("[AutoReroll] Filter slot updated!"),
-                        true
-                    );
+                    NotifyUtil.notifyPlayer("[AutoReroll] Filter slot updated!");
                 } else {
                     FilterStorage.clearFilterItem();
-                    mc.player.displayClientMessage(
-                        new TextComponent("[AutoReroll] Filter cleared!"),
-                        true
-                    );
+                    NotifyUtil.notifyPlayer("[AutoReroll] Filter cleared!");
                 }
             })
             .tooltip((tooltipRenderer, poseStack, mouseX, mouseY, tooltipFlag) -> {
