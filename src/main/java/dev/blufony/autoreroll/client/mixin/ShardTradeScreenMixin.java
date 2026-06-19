@@ -1,9 +1,13 @@
 package dev.blufony.autoreroll.client.mixin;
 
+import dev.blufony.autoreroll.AutoRerollMod;
 import dev.blufony.autoreroll.client.AutoRerollManager;
+import dev.blufony.autoreroll.config.AutoRerollConfig;
 import dev.blufony.autoreroll.client.gui.IconButtonElement;
 import dev.blufony.autoreroll.util.FilterStorage;
 import dev.blufony.autoreroll.util.ItemMatcher;
+import com.simibubi.create.foundation.config.ui.ConfigScreen;
+import com.simibubi.create.foundation.config.ui.SubMenuConfigScreen;
 import iskallia.vault.VaultMod;
 import iskallia.vault.client.atlas.TextureAtlasRegion;
 import iskallia.vault.client.data.ClientExpertiseData;
@@ -26,11 +30,14 @@ import iskallia.vault.skill.expertise.type.BlackMarketExpertise;
 import iskallia.vault.skill.prestige.helper.PrestigeHelper;
 import iskallia.vault.skill.tree.PrestigeTree;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.TextComponent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.client.ForgeHooksClient;
+import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -257,9 +264,19 @@ public abstract class ShardTradeScreenMixin {
                     ItemStack carriedItem = mc.player.containerMenu.getCarried();
                     
                     if (mc.screen.hasShiftDown()) {
-                        System.out.println("[AutoReroll] Shift-click action configured");
-                    } else {
-                        ModNetwork.CHANNEL.sendToServer(ServerboundResetBlackMarketTradesMessage.INSTANCE);
+                        SubMenuConfigScreen configScreen = new SubMenuConfigScreen(
+                            (Screen)(Object)this,
+                            "Auto Reroll Configuration",
+                            ModConfig.Type.CLIENT,
+                            AutoRerollConfig.CLIENT_SPEC,
+                            AutoRerollConfig.CLIENT_SPEC.getValues()
+                        );
+                        ConfigScreen.modID = AutoRerollMod.MOD_ID;
+                        ForgeHooksClient.pushGuiLayer(Minecraft.getInstance(), configScreen);
+                        return;
+                    }
+                    
+                    ModNetwork.CHANNEL.sendToServer(ServerboundResetBlackMarketTradesMessage.INSTANCE);
                         
                         if (mc.level != null && mc.player != null) {
                             mc.level.playSound(
@@ -275,7 +292,6 @@ public abstract class ShardTradeScreenMixin {
                         }
                         
                         AutoRerollManager.start(() -> {});
-                    }
                 }
             );
             
@@ -289,7 +305,7 @@ public abstract class ShardTradeScreenMixin {
             autoRerollButton.tooltip(() -> {
                 Minecraft mc = Minecraft.getInstance();
                 if (mc.screen != null && mc.screen.hasShiftDown()) {
-                    return new TextComponent("Configure Targets"); // TODO: Implement target configuration
+                    return new TextComponent("Open Config");
                 }
                 
                 if (AutoRerollManager.isRunning()) {
