@@ -23,6 +23,7 @@ public class FilterStorage {
     private static final Logger LOGGER = LogManager.getLogger(FilterStorage.class);
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static ItemStack cachedFilterItem = null;
+    private static boolean cachedFilterSimpleMode = false;
     private static boolean cacheLoaded = false;
     
     private static Path getFilterPath() {
@@ -61,20 +62,23 @@ public class FilterStorage {
                 return Optional.empty();
             }
             
-            if (!itemId.getNamespace().equals("create")) {
-                LOGGER.warn("Filter item '{}' is not a Create filter item (expected create:*), skipping auto-reroll", itemId);
-                return Optional.empty();
+            boolean simpleMode = false;
+            if (json.has("simple")) {
+                simpleMode = json.get("simple").getAsBoolean();
+            } else {
             }
             
             ItemStack filterStack = new ItemStack(item);
             
-            if (json.has("tag") && !json.get("tag").isJsonNull()) {
+            if (!simpleMode && json.has("tag") && !json.get("tag").isJsonNull()) {
                 String tagStr = json.get("tag").getAsString();
                 CompoundTag nbt = TagParser.parseTag(tagStr);
                 filterStack.setTag(nbt);
             }
             
-            LOGGER.info("Successfully loaded filter item: {}", itemId);
+            LOGGER.info("Successfully loaded {} filter item: {}", simpleMode ? "simple" : "Create filter", itemId);
+            cachedFilterSimpleMode = simpleMode;
+            cacheLoaded = true;
             return Optional.of(filterStack);
             
         } catch (IOException e) {
@@ -86,7 +90,7 @@ public class FilterStorage {
         }
     }
     
-    public static void saveFilterItem(ItemStack filterStack) {
+    public static void saveFilterItem(ItemStack filterStack, boolean simpleMode) {
         Path path = getFilterPath();
         
         try {
@@ -96,18 +100,21 @@ public class FilterStorage {
             
             JsonObject json = new JsonObject();
             json.addProperty("item", itemId);
+            json.addProperty("simple", simpleMode);
             
-            CompoundTag nbt = filterStack.getTag();
-            if (nbt != null && !nbt.isEmpty()) {
-                json.addProperty("tag", nbt.toString());
+            if (!simpleMode) {
+                CompoundTag nbt = filterStack.getTag();
+                if (nbt != null && !nbt.isEmpty()) {
+                    json.addProperty("tag", nbt.toString());
+                }
             }
             
             String jsonContent = GSON.toJson(json);
             Files.writeString(path, jsonContent);
-            LOGGER.info("Saved filter item to {}", path);
+            LOGGER.info("Saved {} filter item to {}", simpleMode ? "simple" : "Create filter", path);
             
-            // Update cache
             cachedFilterItem = filterStack.copy();
+            cachedFilterSimpleMode = simpleMode;
             cacheLoaded = true;
             
         } catch (IOException e) {
@@ -115,15 +122,33 @@ public class FilterStorage {
         }
     }
     
+    public static void saveFilterItem(ItemStack filterStack) {
+        boolean simpleMode = isSimpleItemMode(filterStack);
+        saveFilterItem(filterStack, simpleMode);
+    }
+    
+    public static boolean isFilterSimpleMode() {
+        if (!cacheLoaded) {
+            loadFilterItem();
+        }
+        return cachedFilterSimpleMode;
+    }
+    
     public static ItemStack getFilterItem() {
         if (!cacheLoaded) {
-                Optional<ItemStack> loaded = loadFilterItem();
+            Optional<ItemStack> loaded = loadFilterItem();
             if (loaded.isPresent()) {
                 cachedFilterItem = loaded.get();
             }
             cacheLoaded = true;
         }
         return cachedFilterItem != null ? cachedFilterItem : ItemStack.EMPTY;
+    }
+    
+    private static boolean isSimpleItemMode(ItemStack stack) {
+        ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(stack.getItem());
+        if (itemId == null) return false;
+        String idString = itemId.toString();
     }
     
     public static void clearFilterItem() {
@@ -134,8 +159,8 @@ public class FilterStorage {
             Files.writeString(path, "{}");
             LOGGER.info("Cleared filter from {}", path);
             
-            // Clear cache
             cachedFilterItem = null;
+            cachedFilterSimpleMode = false;
             cacheLoaded = false;
             
         } catch (IOException e) {

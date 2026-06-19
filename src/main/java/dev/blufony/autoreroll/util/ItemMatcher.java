@@ -51,6 +51,17 @@ public class ItemMatcher {
         }
     }
     
+    public static boolean matchesByItemId(ItemStack stack, ItemStack target) {
+        ResourceLocation stackId = ForgeRegistries.ITEMS.getKey(stack.getItem());
+        ResourceLocation targetId = ForgeRegistries.ITEMS.getKey(target.getItem());
+        
+        if (stackId == null || targetId == null) {
+            return false;
+        }
+        
+        return stackId.equals(targetId);
+    }
+    
     public static boolean isVaultFilterItem(ItemStack stack) {
         if (stack.isEmpty()) return false;
         
