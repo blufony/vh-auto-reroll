@@ -5,7 +5,7 @@ issueTrackerURL="https://github.com/blufony/vh-auto-reroll/issues"
 
 [[mods]]
 modId = "vh_auto_reroll"
-version = "1.0.0"
+version = "${version}"
 displayName = "Auto Reroll"
 authors = "blufony"
 description = '''
