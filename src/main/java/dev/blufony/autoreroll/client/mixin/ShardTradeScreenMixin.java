@@ -260,6 +260,10 @@ public abstract class ShardTradeScreenMixin {
                         return;
                     }
                     
+                    if (!hasFilterItem()) {
+                        return;
+                    }
+                    
                     if (AutoRerollManager.isRunning()) {
                         AutoRerollManager.stop();
                         return;
@@ -299,7 +303,7 @@ public abstract class ShardTradeScreenMixin {
                 }
             );
             
-            autoRerollButton.setDisabled(() -> !hasInfiniteRerollPrestige());
+            autoRerollButton.setDisabled(() -> !hasInfiniteRerollPrestige() || !hasFilterItem());
             
             autoRerollButton.icon(() -> CYCLE_ICON);
             autoRerollButton.activeIcon(() -> TextureAtlasRegion.of(
@@ -312,6 +316,10 @@ public abstract class ShardTradeScreenMixin {
                 
                 if (!hasInfiniteRerollPrestige()) {
                     return new TextComponent("Unlock Whispers of the Market Prestige to Auto-Reroll");
+                }
+                
+                if (!hasFilterItem()) {
+                    return new TextComponent("Set filter to Auto-Reroll");
                 }
                 
                 if (mc.screen != null && mc.screen.hasShiftDown()) {
@@ -403,5 +411,10 @@ public abstract class ShardTradeScreenMixin {
         
         PrestigeTree prestige = PrestigeHelper.getPrestige(mc.player);
         return !prestige.getAll(BlackMarketRerollsPrestigePowerPower.class, Skill::isUnlocked).isEmpty();
+    }
+    
+    private boolean hasFilterItem() {
+        ItemStack filterItem = FilterStorage.getFilterItem();
+        return filterItem != null && !filterItem.isEmpty();
     }
 }
