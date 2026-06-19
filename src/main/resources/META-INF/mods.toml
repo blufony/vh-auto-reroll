@@ -37,9 +37,16 @@ displayURL="https://github.com/blufony/vh-auto-reroll"
 [[dependencies.vh_auto_reroll]]
     modId = "vaultfilters"
     mandatory = true
-    versionRange = "[1,)"
+    versionRange = "[1, )"
     ordering = "AFTER"
     side = "BOTH"
+
+[[dependencies.vh_auto_reroll]]
+    modId = "jei"
+    mandatory = false
+    versionRange = "[9,)"
+    ordering = "AFTER"
+    side = "CLIENT"
 
 [mods.vh_auto_reroll.displayTest]
     matchMods = true
