@@ -15,7 +15,7 @@ public class AutoRerollConfig {
 
         MAX_REROLLS = CLIENT_BUILDER
             .comment("Maximum number of rerolls before giving up")
-            .defineInRange("maxRerolls", 100, 1, Integer.MAX_VALUE);
+            .defineInRange("maxRerolls", 1000, 1, Integer.MAX_VALUE);
 
         PAUSE_BETWEEN_REROLLS_MS = CLIENT_BUILDER
             .comment("Pause between rerolls in milliseconds (0 = disabled, recommended for normal use)")
@@ -23,7 +23,7 @@ public class AutoRerollConfig {
 
         SEARCH_ALL_SLOTS = CLIENT_BUILDER
             .comment("Search all 3 trade slots instead of only the center slot")
-            .define("searchAllSlots", false);
+            .define("searchAllSlots", true);
 
         CLIENT_BUILDER.pop();
         CLIENT_SPEC = CLIENT_BUILDER.build();
