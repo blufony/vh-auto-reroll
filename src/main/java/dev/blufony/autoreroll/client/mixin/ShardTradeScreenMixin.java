@@ -7,9 +7,14 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
+import iskallia.vault.client.gui.framework.ScreenTextures;
 import iskallia.vault.client.gui.framework.element.ButtonElement;
 import iskallia.vault.client.gui.framework.element.spi.ElementStore;
 import iskallia.vault.client.gui.framework.render.Tooltips;
+import iskallia.vault.client.gui.framework.spatial.Spatials;
+import iskallia.vault.client.atlas.TextureAtlasRegion;
+import iskallia.vault.init.ModTextureAtlases;
+import iskallia.vault.VaultMod;
 import iskallia.vault.container.inventory.ShardTradeContainer;
 import iskallia.vault.client.data.ClientExpertiseData;
 import iskallia.vault.client.data.ClientShardTradeData;
@@ -20,8 +25,13 @@ import iskallia.vault.skill.prestige.helper.PrestigeHelper;
 import iskallia.vault.skill.prestige.BlackMarketRerollsPrestigePowerPower;
 import iskallia.vault.skill.base.Skill;
 import dev.blufony.autoreroll.client.AutoRerollManager;
+import dev.blufony.autoreroll.client.gui.IconButtonElement;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.TextComponent;
+import net.minecraft.sounds.SoundSource;
+import iskallia.vault.init.ModNetwork;
+import iskallia.vault.init.ModSounds;
+import iskallia.vault.network.message.ServerboundResetBlackMarketTradesMessage;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -35,9 +45,52 @@ public abstract class ShardTradeScreenMixin {
     private static Method WORLD_SPATIAL_X_METHOD;
     private static Method WORLD_SPATIAL_Y_METHOD;
     private static Object RESET_TRADES_TEXTURES;
+    private static ButtonElement.ButtonTextures AUTO_REROLL_BUTTON_TEXTURES;
+    
+    // Define the auto-reroll button textures using Vault's blue button
+    static {
+        try {
+        // Create blue button texture regions (with .9 suffix for nine-slice)
+        TextureAtlasRegion BLUE_BUTTON_NORMAL = TextureAtlasRegion.of(
+            ModTextureAtlases.SCREEN, 
+            VaultMod.id("gui/screen/button/blue/normal.9")
+        );
+        TextureAtlasRegion BLUE_BUTTON_HOVER = TextureAtlasRegion.of(
+            ModTextureAtlases.SCREEN, 
+            VaultMod.id("gui/screen/button/blue/hover.9")
+        );
+        TextureAtlasRegion BLUE_BUTTON_PRESSED = TextureAtlasRegion.of(
+            ModTextureAtlases.SCREEN, 
+            VaultMod.id("gui/screen/button/blue/pressed.9")
+        );
+        TextureAtlasRegion BLUE_BUTTON_DISABLED = TextureAtlasRegion.of(
+            ModTextureAtlases.SCREEN, 
+            VaultMod.id("gui/screen/button/blue/disabled.9")
+        );
+        
+        AUTO_REROLL_BUTTON_TEXTURES = new ButtonElement.ButtonTextures(
+            BLUE_BUTTON_NORMAL,
+            BLUE_BUTTON_HOVER,
+
+            BLUE_BUTTON_PRESSED,
+            BLUE_BUTTON_DISABLED
+        );
+
+
+        } catch (Exception e) {
+            System.err.println("[AutoReroll] Failed to create button textures: " + e.getMessage());
+        }
+    }
+    
+    // Cycle icon overlay
+    private static final TextureAtlasRegion CYCLE_ICON = TextureAtlasRegion.of(
+        ModTextureAtlases.SCREEN, 
+        VaultMod.id("gui/screen/button/cycle")
+    );
     
     static {
         try {
+            Minecraft mc = Minecraft.getInstance();
             Class<?> clazz = iskallia.vault.client.gui.screen.ShardTradeScreen.class;
             
             while (clazz != null && ELEMENT_STORE_FIELD == null) {
@@ -124,11 +177,8 @@ public abstract class ShardTradeScreenMixin {
             }
             
             ButtonElement<?> resetButton = (ButtonElement<?>) guiElements.get(resetButtonIndex);
-            boolean modified = modifyButtonClick(resetButton);
-            
-            if (!modified) {
-                System.err.println("[AutoReroll] Failed to modify reset button");
-            }
+            modifyButtonClick(resetButton);
+            addAutoRerollButton(store, resetButton);
             
         } catch (Exception e) {
             System.err.println("[AutoReroll] Error during button modification: " + e.getMessage());
@@ -148,8 +198,10 @@ public abstract class ShardTradeScreenMixin {
                 
                 if (mc.screen != null && mc.screen.hasShiftDown()) {
                     try {
-                        originalOnClick.accept(btn);
-                        AutoRerollManager.start();
+                        if (!AutoRerollManager.isRunning()) {
+                            originalOnClick.accept(btn);
+                            AutoRerollManager.start();
+                        }
                     } catch (Exception e) {
                         System.err.println("[AutoReroll] Error in shift-click handler: " + e.getMessage());
                     }
@@ -210,6 +262,73 @@ public abstract class ShardTradeScreenMixin {
         } catch (Exception e) {
             System.err.println("[AutoReroll] Error modifying button: " + e.getMessage());
             return false;
+        }
+    }
+    
+    private void addAutoRerollButton(ElementStore store, ButtonElement<?> resetButton) {
+        try {
+            if (AUTO_REROLL_BUTTON_TEXTURES == null) {
+                System.err.println("[AutoReroll] Auto-reroll button textures not initialized");
+                return;
+            }
+            
+            int resetX = (int) WORLD_SPATIAL_X_METHOD.invoke(resetButton);
+            int resetY = (int) WORLD_SPATIAL_Y_METHOD.invoke(resetButton);
+
+            int autoRerollX = resetX + 21;
+            int autoRerollY = resetY + 2;
+            
+            IconButtonElement autoRerollButton = new IconButtonElement(
+                Spatials.positionXY(autoRerollX, autoRerollY),
+                AUTO_REROLL_BUTTON_TEXTURES,
+                () -> {
+                    Minecraft mc = Minecraft.getInstance();
+                    if (mc.screen != null && mc.screen.hasShiftDown()) {
+                        System.out.println("[AutoReroll] Shift-click action configured");
+                    } else {
+                        // Send reset packet
+                        ModNetwork.CHANNEL.sendToServer(ServerboundResetBlackMarketTradesMessage.INSTANCE);
+                        
+                        // Play sound
+                        if (mc.level != null && mc.player != null) {
+                            mc.level.playSound(
+                                mc.player,
+                                mc.player.getX(),
+                                mc.player.getY(),
+                                mc.player.getZ(),
+                                ModSounds.SKILL_TREE_LEARN_SFX,
+                                SoundSource.BLOCKS,
+                                0.75F,
+                                1.0F
+                            );
+                        }
+                        
+                        // Start auto-reroll
+                        AutoRerollManager.start();
+                    }
+                }
+            );
+            
+            // Add cycle icon overlay - use highlight when auto-rerolling
+            autoRerollButton.icon(() -> CYCLE_ICON);
+            autoRerollButton.activeIcon(() -> TextureAtlasRegion.of(
+                ModTextureAtlases.SCREEN, 
+                VaultMod.id("gui/screen/button/cycle_highlight")
+            ));
+            
+            autoRerollButton.tooltip(() -> {
+                Minecraft mc = Minecraft.getInstance();
+                if (mc.screen != null && mc.screen.hasShiftDown()) {
+                    return new TextComponent("Configure Targets"); // TODO: Implement target configuration
+                }
+                return new TextComponent("Start Auto-Reroll");
+            });
+            
+            ((IconButtonElement) store.addElement(autoRerollButton))
+                .layout((screen, gui, parent, world) -> world.translateXY(gui));
+            
+        } catch (Exception e) {
+            System.err.println("[AutoReroll] Error adding auto-reroll button: " + e.getMessage());
         }
     }
 }
