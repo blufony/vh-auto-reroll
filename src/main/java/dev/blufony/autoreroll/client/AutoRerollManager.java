@@ -30,6 +30,7 @@ public class AutoRerollManager {
     private static int currentRerollCount = 0;
     private static boolean cancelRequested = false;
     private static Optional<ItemStack> filterItemStack = Optional.empty();
+    private static boolean filterIsSimpleMode = false;
     private static Runnable resumeHandler;
     private static long pauseBetweenRerollsMs;
     private static ScheduledExecutorService scheduler;
@@ -52,6 +53,7 @@ public class AutoRerollManager {
         isRunning = true;
         currentRerollCount = 0;
         cancelRequested = false;
+        filterIsSimpleMode = FilterStorage.isFilterSimpleMode();
         
         scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread t = new Thread(runnable, "auto-reroll-scheduler");
@@ -59,7 +61,7 @@ public class AutoRerollManager {
             return t;
         });
         
-        LOGGER.info("Auto-reroll started with filter: {}", filterItemStack.get().getItem());
+        LOGGER.info("Auto-reroll started with {} filter: {}", filterIsSimpleMode ? "simple" : "Create filter", filterItemStack.get().getItem());
     }
     
     public static synchronized void stop() {
@@ -142,7 +144,12 @@ public class AutoRerollManager {
                     
                     ItemStack item = trade.getA();
                     
-                    if (ItemMatcher.matchesWithFilter(item, filterItemStack.get(), level)) {
+                    if (filterIsSimpleMode) {
+                        if (ItemMatcher.matchesByItemId(item, filterItemStack.get())) {
+                            foundMatch = true;
+                            break;
+                        }
+                    } else if (ItemMatcher.matchesWithFilter(item, filterItemStack.get(), level)) {
                         foundMatch = true;
                         break;
                     }

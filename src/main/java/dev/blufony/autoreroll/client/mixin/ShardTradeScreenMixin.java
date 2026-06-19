@@ -363,7 +363,7 @@ public abstract class ShardTradeScreenMixin {
                 
                 ItemStack carriedItem = mc.player.containerMenu.getCarried();
                 
-                if (!carriedItem.isEmpty() && ItemMatcher.isVaultFilterItem(carriedItem)) {
+                if (!carriedItem.isEmpty()) {
                     FilterStorage.saveFilterItem(carriedItem);
                     mc.player.displayClientMessage(
                         new TextComponent("[AutoReroll] Filter slot updated!"),
@@ -390,7 +390,7 @@ public abstract class ShardTradeScreenMixin {
                 if (filterItem != null && !filterItem.isEmpty()) {
                     tooltipRenderer.renderTooltip(poseStack, filterItem, mouseX, mouseY, TooltipDirection.RIGHT);
                 } else {
-                    tooltipRenderer.renderTooltip(poseStack, new TextComponent("Click with Create Filter to set Auto-Reroll Target"), mouseX, mouseY, TooltipDirection.RIGHT);
+                    tooltipRenderer.renderTooltip(poseStack, new TextComponent("Click with Create Filter or Item to set Auto-Reroll Target"), mouseX, mouseY, TooltipDirection.RIGHT);
                 }
                 
                 return true;
