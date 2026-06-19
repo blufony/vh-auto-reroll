@@ -1,0 +1,12 @@
+{
+  "required": true,
+  "package": "dev.blufony.autoreroll.client.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "autoreroll-refmap.json",
+  "mixins": [
+  ],
+  "client": [
+    "ShardTradeScreenMixin"
+  ],
+  "minVersion": "0.8"
+}

@@ -1,0 +1,46 @@
+modLoader = "javafml"
+loaderVersion = "[40,)"
+license = "MIT"
+issueTrackerURL="https://github.com/blufony/vh-auto-reroll/issues"
+
+[[mods]]
+modId = "auto_reroll"
+version = "1.0.0"
+displayName = "Auto Reroll Mod"
+authors = "blufony"
+description = '''
+Automatically rerolls the Black Market until you get your desired item.
+'''
+displayURL="https://github.com/blufony/vh-auto-reroll"
+
+[[dependencies.auto_reroll]]
+    modId = "forge"
+    mandatory = true
+    versionRange = "[40,)"
+    ordering = "NONE"
+    side = "CLIENT"
+
+[[dependencies.auto_reroll]]
+    modId = "the_vault"
+    mandatory = true
+    versionRange = "[1,)"
+    ordering = "AFTER"
+    side = "BOTH"
+
+[[dependencies.auto_reroll]]
+    modId = "create"
+    mandatory = true
+    versionRange = "[0.5,)"
+    ordering = "AFTER"
+    side = "CLIENT"
+
+[[dependencies.auto_reroll]]
+    modId = "vaultfilters"
+    mandatory = true
+    versionRange = "[1,)"
+    ordering = "AFTER"
+    side = "BOTH"
+
+[mods.auto_reroll.displayTest]
+    matchMods = true
+    matchVersion = true
