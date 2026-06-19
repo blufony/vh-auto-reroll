@@ -1,3 +1,9 @@
+## 0.1.2
+
+- add jei integration
+- add integrated omega slot only toggle 
+- add auto buy mechanic
+
 ## 0.1.1
 
 - add simple item filter
