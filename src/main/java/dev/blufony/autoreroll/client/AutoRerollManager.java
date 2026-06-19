@@ -19,7 +19,9 @@ public class AutoRerollManager {
     private static boolean isRunning = false;
     private static int currentRerollCount = 0;
     private static boolean cancelRequested = false;
-    private static List<ResourceLocation> targetItems;
+    private static List<? extends String> generalTargets;
+    private static List<? extends String> boosterPackTargets;
+    private static List<? extends String> inscriptionTargets;
     private static ScheduledExecutorService scheduler;
     
     public static synchronized void start() {
@@ -27,16 +29,18 @@ public class AutoRerollManager {
             return;
         }
         
-        List<? extends String> targetStrings = AutoRerollConfig.TARGETS.get();
-        if (targetStrings == null || targetStrings.isEmpty()) {
+        generalTargets = AutoRerollConfig.GENERAL_TARGETS.get();
+        boosterPackTargets = AutoRerollConfig.BOOSTER_PACK_TARGETS.get();
+        inscriptionTargets = AutoRerollConfig.INSCRIPTION_TARGETS.get();
+        
+        if ((generalTargets == null || generalTargets.isEmpty()) &&
+            (boosterPackTargets == null || boosterPackTargets.isEmpty()) &&
+            (inscriptionTargets == null || inscriptionTargets.isEmpty())) {
             return;
         }
         
         ensureSchedulerShutdown();
         
-        targetItems = targetStrings.stream()
-            .map(ResourceLocation::new)
-            .collect(Collectors.toList());
         isRunning = true;
         currentRerollCount = 0;
         cancelRequested = false;
@@ -108,7 +112,12 @@ public class AutoRerollManager {
                 
                 ItemStack centerItem = centerTrade.getA();
                 
-                if (ItemMatcher.matches(centerItem, targetItems)) {
+                var allTargets = java.util.stream.Stream.concat(
+                    java.util.stream.Stream.concat(generalTargets.stream(), boosterPackTargets.stream()),
+                    inscriptionTargets.stream()
+                ).collect(java.util.stream.Collectors.toList());
+                
+                if (ItemMatcher.matchesWithNbt(centerItem, allTargets)) {
                     stop();
                     return;
                 }
