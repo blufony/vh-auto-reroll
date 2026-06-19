@@ -200,65 +200,20 @@ public abstract class ShardTradeScreenMixin {
             }
             
             Consumer<ButtonElement<?>> wrappedOnClick = btn -> {
-                Minecraft mc = Minecraft.getInstance();
+                if (AutoRerollManager.isRunning()) {
+                    return;
+                }
                 
-                if (mc.screen != null && mc.screen.hasShiftDown()) {
-                    try {
-                        if (!AutoRerollManager.isRunning()) {
-                            originalOnClick.accept(btn);
-                            AutoRerollManager.start(() -> {});
-                        }
-                    } catch (Exception e) {
-                        System.err.println("[AutoReroll] Error in shift-click handler: " + e.getMessage());
-                    }
-                } else {
-                    try {
-                        originalOnClick.accept(btn);
-                    } catch (Exception e) {
-                        System.err.println("[AutoReroll] Error in normal click handler: " + e.getMessage());
-                    }
+                try {
+                    originalOnClick.accept(btn);
+                } catch (Exception e) {
+                    System.err.println("[AutoReroll] Error in click handler: " + e.getMessage());
                 }
             };
             
             ON_CLICK_FIELD.set(button, wrappedOnClick);
             
-            button.tooltip(Tooltips.shift(
-                Tooltips.multi(() -> {
-                    if (AutoRerollManager.isRunning()) {
-                        return List.of(new TextComponent("Auto-Reroll Active"));
-                    }
-                    
-                    PrestigeTree prestige = PrestigeHelper.getPrestige(Minecraft.getInstance().player);
-                    boolean hasInfiniteRerolls = !prestige.getAll(BlackMarketRerollsPrestigePowerPower.class, Skill::isUnlocked).isEmpty();
-                    if (hasInfiniteRerolls) {
-                        return List.of(new TextComponent("Infinite Rerolls"));
-                    }
 
-                    int totalRolls = 0;
-                    boolean hasExpertise = false;
-
-                    for (TieredSkill learnedTalentNode : ClientExpertiseData.getLearnedTalentNodes()) {
-                        if (learnedTalentNode.getChild() instanceof BlackMarketExpertise blackMarketExpertise) {
-                            totalRolls += blackMarketExpertise.getNumberOfRolls();
-                            hasExpertise = true;
-                        }
-                    }
-
-                    if (hasExpertise) {
-                        int numOfRollsLeft = totalRolls - ClientShardTradeData.getRerollsUsed();
-                        return List.of(new TextComponent("Rolls Left: " + numOfRollsLeft));
-                    } else {
-                        return List.of(new TextComponent("Unlock Marketer Expertise to Re-roll"));
-                    }
-                }),
-                
-                Tooltips.multi(() -> {
-                    if (AutoRerollManager.isRunning()) {
-                        return List.of(new TextComponent("Auto-Reroll Active"));
-                    }
-                    return List.of(new TextComponent("Shift-click to start auto-reroll"));
-                })
-            ));
             
             return true;
             
@@ -291,6 +246,10 @@ public abstract class ShardTradeScreenMixin {
                     Minecraft mc = Minecraft.getInstance();
                     
                     if (mc.player == null || mc.screen == null) {
+                        return;
+                    }
+                    
+                    if (AutoRerollManager.isRunning()) {
                         return;
                     }
                     
