@@ -250,6 +250,7 @@ public abstract class ShardTradeScreenMixin {
                     }
                     
                     if (AutoRerollManager.isRunning()) {
+                        AutoRerollManager.stop();
                         return;
                     }
                     
@@ -289,6 +290,10 @@ public abstract class ShardTradeScreenMixin {
                 Minecraft mc = Minecraft.getInstance();
                 if (mc.screen != null && mc.screen.hasShiftDown()) {
                     return new TextComponent("Configure Targets"); // TODO: Implement target configuration
+                }
+                
+                if (AutoRerollManager.isRunning()) {
+                    return new TextComponent("Stop Auto-Reroll");
                 }
                 return new TextComponent("Start Auto-Reroll");
             });
