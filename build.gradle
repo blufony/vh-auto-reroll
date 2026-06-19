@@ -49,7 +49,7 @@ minecraft {
         client {
             workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
+            property 'forge.logging.console.level', 'info'
             
             mods {
                 autoreroll {
@@ -61,7 +61,7 @@ minecraft {
         server {
             workingDirectory project.file('run')
             property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
+            property 'forge.logging.console.level', 'info'
             
             mods {
                 autoreroll {

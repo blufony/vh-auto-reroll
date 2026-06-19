@@ -59,8 +59,8 @@ public class AutoRerollConfig {
             .defineInRange("maxRerolls", 100, 1, Integer.MAX_VALUE);
 
         PAUSE_BETWEEN_REROLLS_MS = CLIENT_BUILDER
-            .comment("Pause between rerolls in milliseconds")
-            .defineInRange("pauseBetweenRerollsMs", 100, 100, Integer.MAX_VALUE);
+            .comment("Pause between rerolls in milliseconds (0 = disabled, recommended for normal use)")
+            .defineInRange("pauseBetweenRerollsMs", 0, 0, Integer.MAX_VALUE);
 
         CLIENT_BUILDER.pop();
         CLIENT_SPEC = CLIENT_BUILDER.build();

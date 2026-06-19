@@ -2,17 +2,19 @@ package dev.blufony.autoreroll.client;
 
 import dev.blufony.autoreroll.config.AutoRerollConfig;
 import dev.blufony.autoreroll.util.ItemMatcher;
-import net.minecraft.resources.ResourceLocation;
+import iskallia.vault.network.message.ShardTradeMessage;
 import net.minecraft.util.Tuple;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.common.Mod;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Mod.EventBusSubscriber(modid = "auto_reroll", bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public class AutoRerollManager {
@@ -50,15 +52,16 @@ public class AutoRerollManager {
             t.setDaemon(true);
             return t;
         });
-        
-        scheduleNextReroll();
     }
     
     public static synchronized void stop() {
-        if (!isRunning) return;
+        if (!isRunning) {
+            return;
+        }
         
         cancelRequested = true;
         isRunning = false;
+        int finalCount = currentRerollCount;
         currentRerollCount = 0;
         
         ensureSchedulerShutdown();
@@ -66,7 +69,10 @@ public class AutoRerollManager {
     
     private static synchronized void ensureSchedulerShutdown() {
         if (scheduler != null) {
-            scheduler.shutdownNow();
+            List<Runnable> cancelledTasks = scheduler.shutdownNow();
+            if (!cancelledTasks.isEmpty()) {
+                // Cancelled tasks noted
+            }
             try {
                 if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
                     scheduler.shutdownNow();
@@ -79,61 +85,73 @@ public class AutoRerollManager {
         }
     }
     
-    private static void scheduleNextReroll() {
-        if (cancelRequested || !isRunning) return;
+    private static void sendResetRequest() {
+        if (cancelRequested || !isRunning) {
+            return;
+        }
         
-        scheduler.schedule(() -> {
-            if (cancelRequested || !isRunning) return;
-            
-            currentRerollCount++;
-            
-            iskallia.vault.init.ModNetwork.CHANNEL.sendToServer(
-                iskallia.vault.network.message.ServerboundResetBlackMarketTradesMessage.INSTANCE
-            );
-            
-            scheduleTradeCheck();
-            
-        }, 0, TimeUnit.MILLISECONDS);
+        currentRerollCount++;
+        
+        iskallia.vault.init.ModNetwork.CHANNEL.sendToServer(
+            iskallia.vault.network.message.ServerboundResetBlackMarketTradesMessage.INSTANCE
+        );
     }
     
-    private static void scheduleTradeCheck() {
-        if (cancelRequested || !isRunning) return;
+    public static synchronized void onServerResponse(ShardTradeMessage message) {
+        if (cancelRequested || !isRunning) {
+            return;
+        }
+        
+        Map<Integer, Tuple<ItemStack, Integer>> availableTrades = message.getAvailableTrades();
+        long delay = AutoRerollConfig.PAUSE_BETWEEN_REROLLS_MS.get();
         
         scheduler.schedule(() -> {
-            if (cancelRequested || !isRunning) return;
+            if (cancelRequested || !isRunning) {
+                return;
+            }
             
             try {
-                Tuple<ItemStack, Integer> centerTrade = iskallia.vault.client.data.ClientShardTradeData.getTradeInfo(1);
+                Tuple<ItemStack, Integer> centerTrade = availableTrades.get(1);
                 
                 if (centerTrade == null) {
-                    scheduleTradeCheck();
+                    System.out.println("[AutoReroll] [WARNING] No center trade found in response! Trade map keys: " + availableTrades.keySet());
+                    scheduleNextCycle();
                     return;
                 }
                 
                 ItemStack centerItem = centerTrade.getA();
                 
-                var allTargets = java.util.stream.Stream.concat(
-                    java.util.stream.Stream.concat(generalTargets.stream(), boosterPackTargets.stream()),
+                var allTargets = Stream.concat(
+                    Stream.concat(generalTargets.stream(), boosterPackTargets.stream()),
                     inscriptionTargets.stream()
-                ).collect(java.util.stream.Collectors.toList());
+                ).collect(Collectors.toList());
                 
-                if (ItemMatcher.matchesWithNbt(centerItem, allTargets)) {
+                boolean isMatch = ItemMatcher.matchesWithNbt(centerItem, allTargets);
+                
+                if (isMatch) {
                     stop();
                     return;
                 }
                 
                 if (currentRerollCount >= AutoRerollConfig.MAX_REROLLS.get()) {
+                    int maxRerolls = AutoRerollConfig.MAX_REROLLS.get();
                     stop();
                     return;
                 }
                 
-                scheduleNextReroll();
+                scheduleNextCycle();
                 
             } catch (Exception e) {
-                System.err.println("[AutoReroll] Error checking trades: " + e.getMessage());
+                System.err.println("[AutoReroll] [ERROR] Exception during trade check:");
+                e.printStackTrace();
+                System.err.println("[AutoReroll] [ERROR] Error message: " + e.getMessage());
                 stop();
             }
-        }, AutoRerollConfig.PAUSE_BETWEEN_REROLLS_MS.get(), TimeUnit.MILLISECONDS);
+        }, delay, TimeUnit.MILLISECONDS);
+    }
+    
+    private static void scheduleNextCycle() {
+        sendResetRequest();
     }
     
     public static int getCurrentRerollCount() {
