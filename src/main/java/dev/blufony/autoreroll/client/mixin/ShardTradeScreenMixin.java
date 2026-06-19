@@ -256,6 +256,10 @@ public abstract class ShardTradeScreenMixin {
                         return;
                     }
                     
+                    if (!hasInfiniteRerollPrestige()) {
+                        return;
+                    }
+                    
                     if (AutoRerollManager.isRunning()) {
                         AutoRerollManager.stop();
                         return;
@@ -295,7 +299,8 @@ public abstract class ShardTradeScreenMixin {
                 }
             );
             
-            // Add cycle icon overlay - use highlight when auto-rerolling
+            autoRerollButton.setDisabled(() -> !hasInfiniteRerollPrestige());
+            
             autoRerollButton.icon(() -> CYCLE_ICON);
             autoRerollButton.activeIcon(() -> TextureAtlasRegion.of(
                 ModTextureAtlases.SCREEN, 
@@ -304,6 +309,11 @@ public abstract class ShardTradeScreenMixin {
             
             autoRerollButton.tooltip(() -> {
                 Minecraft mc = Minecraft.getInstance();
+                
+                if (!hasInfiniteRerollPrestige()) {
+                    return new TextComponent("Unlock Whispers of the Market Prestige to Auto-Reroll");
+                }
+                
                 if (mc.screen != null && mc.screen.hasShiftDown()) {
                     return new TextComponent("Open Config");
                 }
@@ -324,7 +334,6 @@ public abstract class ShardTradeScreenMixin {
     
     private void addFilterSlot(ElementStore store) {
         try {
-            // Position: centered below "Black Market", above random trade slot
             int posX = 29;
             int posY = 21;
             
@@ -334,13 +343,13 @@ public abstract class ShardTradeScreenMixin {
                     ItemStack filterItem = FilterStorage.getFilterItem();
                     return filterItem != null && !filterItem.isEmpty() ? filterItem : ItemStack.EMPTY;
                 },
-                () -> false // Always enabled
+                () -> !hasInfiniteRerollPrestige()
             )
             .layout((screen, gui, parent, world) -> world.translateXY(gui))
             .whenClicked(isDisabled -> {
                 Minecraft mc = Minecraft.getInstance();
                 
-                if (mc.player == null) {
+                if (mc.player == null || isDisabled) {
                     return;
                 }
                 
@@ -353,7 +362,6 @@ public abstract class ShardTradeScreenMixin {
                         true
                     );
                 } else {
-                    // Clear filter if clicking with empty hand or non-filter item
                     FilterStorage.clearFilterItem();
                     mc.player.displayClientMessage(
                         new TextComponent("[AutoReroll] Filter cleared!"),
@@ -362,12 +370,18 @@ public abstract class ShardTradeScreenMixin {
                 }
             })
             .tooltip((tooltipRenderer, poseStack, mouseX, mouseY, tooltipFlag) -> {
+                if (!hasInfiniteRerollPrestige()) {
+                    tooltipRenderer.renderTooltip(poseStack, 
+                        new TextComponent("Unlock Whispers of the Market Prestige to Auto-Reroll"), 
+                        mouseX, mouseY, TooltipDirection.RIGHT);
+                    return true;
+                }
+                
                 ItemStack filterItem = FilterStorage.getFilterItem();
                 
                 if (filterItem != null && !filterItem.isEmpty()) {
                     tooltipRenderer.renderTooltip(poseStack, filterItem, mouseX, mouseY, TooltipDirection.RIGHT);
                 } else {
-                    // Show tooltip when empty
                     tooltipRenderer.renderTooltip(poseStack, new TextComponent("Click to save filter"), mouseX, mouseY, TooltipDirection.RIGHT);
                 }
                 
@@ -379,5 +393,15 @@ public abstract class ShardTradeScreenMixin {
         } catch (Exception e) {
             System.err.println("[AutoReroll] Error adding filter slot: " + e.getMessage());
         }
+    }
+    
+    private boolean hasInfiniteRerollPrestige() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) {
+            return false;
+        }
+        
+        PrestigeTree prestige = PrestigeHelper.getPrestige(mc.player);
+        return !prestige.getAll(BlackMarketRerollsPrestigePowerPower.class, Skill::isUnlocked).isEmpty();
     }
 }
