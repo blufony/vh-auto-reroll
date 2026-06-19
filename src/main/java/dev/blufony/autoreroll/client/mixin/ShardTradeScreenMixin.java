@@ -4,6 +4,7 @@ import dev.blufony.autoreroll.AutoRerollMod;
 import dev.blufony.autoreroll.client.AutoRerollManager;
 import dev.blufony.autoreroll.config.AutoRerollConfig;
 import dev.blufony.autoreroll.client.gui.IconButtonElement;
+import dev.blufony.autoreroll.client.gui.SlotTargetToggle;
 import dev.blufony.autoreroll.util.FilterStorage;
 import dev.blufony.autoreroll.util.ItemMatcher;
 import dev.blufony.autoreroll.util.NotifyUtil;
@@ -192,6 +193,7 @@ public abstract class ShardTradeScreenMixin {
             modifyButtonClick(resetButton);
             addAutoRerollButton(store, resetButton);
             addFilterSlot(store);
+            addSlotTargetToggle(store);
             
         } catch (Exception e) {
             System.err.println("[AutoReroll] Error during button modification: " + e.getMessage());
@@ -382,6 +384,77 @@ public abstract class ShardTradeScreenMixin {
             
         } catch (Exception e) {
             System.err.println("[AutoReroll] Error adding filter slot: " + e.getMessage());
+        }
+    }
+    
+    private void addSlotTargetToggle(ElementStore store) {
+        try {
+            if (!hasInfiniteRerollPrestige()) {
+                return;
+            }
+            
+            var guiElements = store.getGuiEventElementList();
+            ButtonElement<?> omegaButton = null;
+            
+            for (var element : guiElements) {
+                if (!(element instanceof ButtonElement<?>)) {
+                    continue;
+                }
+                
+                int btnX = (int) WORLD_SPATIAL_X_METHOD.invoke(element);
+                int btnY = (int) WORLD_SPATIAL_Y_METHOD.invoke(element);
+                
+                if (btnX >= 75 && btnX <= 80 && btnY >= 40 && btnY <= 46) {
+                    omegaButton = (ButtonElement<?>) element;
+                    break;
+                }
+            }
+            
+            if (omegaButton == null) {
+                System.err.println("[AutoReroll] Omega trade button not found - slot target toggle disabled");
+                return;
+            }
+            
+            int centerX = (int) WORLD_SPATIAL_X_METHOD.invoke(omegaButton);
+            int centerY = (int) WORLD_SPATIAL_Y_METHOD.invoke(omegaButton);
+            
+            int toggleX = centerX - 14;
+            int toggleY = centerY + 5;
+            
+            SlotTargetToggle toggle = new SlotTargetToggle(
+                Spatials.positionXY(toggleX, toggleY),
+                () -> {}
+            );
+            
+            SlotTargetToggle finalToggle = toggle;
+            
+            try {
+                ON_CLICK_FIELD.set(toggle, (Consumer<ButtonElement<?>>) btn -> {
+                    boolean newMode = !finalToggle.isOmegaOnly();
+                    finalToggle.setOmegaOnly(newMode);
+                    AutoRerollConfig.SEARCH_ALL_SLOTS.set(!newMode);
+                    AutoRerollConfig.CLIENT_SPEC.save();
+                });
+            } catch (Exception e) {
+                System.err.println("[AutoReroll] Failed to set toggle click handler: " + e.getMessage());
+                return;
+            }
+            
+            toggle.tooltip(() -> {
+                if (!hasInfiniteRerollPrestige()) {
+                    return new TextComponent("Unlock Whispers of the Market Prestige");
+                }
+                
+                return toggle.isOmegaOnly()
+                    ? new TextComponent("Omega slot only")
+                    : new TextComponent("Search all slots");
+            });
+            
+            ((SlotTargetToggle) store.addElement(toggle))
+                .layout((screen, gui, parent, world) -> world.translateXY(gui));
+            
+        } catch (Exception e) {
+            System.err.println("[AutoReroll] Error adding slot target toggle: " + e.getMessage());
         }
     }
     
