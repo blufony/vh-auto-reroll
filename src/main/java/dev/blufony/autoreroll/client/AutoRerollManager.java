@@ -187,6 +187,30 @@ public class AutoRerollManager {
                 
                 if (currentRerollCount >= AutoRerollConfig.MAX_REROLLS.get()) {
                     LOGGER.info("Max rerolls ({}) reached without finding match", AutoRerollConfig.MAX_REROLLS.get());
+                    
+                    Minecraft mc = Minecraft.getInstance();
+                    if (mc.player != null) {
+                        mc.execute(() -> {
+                            mc.player.displayClientMessage(
+                                new TextComponent("[AutoReroll] Failed to find target after " + AutoRerollConfig.MAX_REROLLS.get() + " rerolls"),
+                                true
+                            );
+                            
+                            if (mc.level != null) {
+                                mc.level.playSound(
+                                    mc.player,
+                                    mc.player.getX(),
+                                    mc.player.getY(),
+                                    mc.player.getZ(),
+                                    iskallia.vault.init.ModSounds.BOOSTER_PACK_FAIL_SFX,
+                                    SoundSource.BLOCKS,
+                                    0.75F,
+                                    1.0F
+                                );
+                            }
+                        });
+                    }
+                    
                     stop();
                     return;
                 }
