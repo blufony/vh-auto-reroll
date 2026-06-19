@@ -111,24 +111,34 @@ public class AutoRerollManager {
             }
             
             try {
-                Tuple<ItemStack, Integer> centerTrade = availableTrades.get(1);
+                boolean searchAllSlots = AutoRerollConfig.SEARCH_ALL_SLOTS.get();
+                int[] slotsToCheck = searchAllSlots ? new int[]{0, 1, 2} : new int[]{1};
                 
-                if (centerTrade == null) {
-                    System.out.println("[AutoReroll] [WARNING] No center trade found in response! Trade map keys: " + availableTrades.keySet());
-                    scheduleNextCycle();
-                    return;
+                boolean foundMatch = false;
+                
+                for (int slotIndex : slotsToCheck) {
+                    Tuple<ItemStack, Integer> trade = availableTrades.get(slotIndex);
+                    
+                    if (trade == null) {
+                        continue;
+                    }
+                    
+                    ItemStack item = trade.getA();
+                    
+                    var allTargets = Stream.concat(
+                        Stream.concat(generalTargets.stream(), boosterPackTargets.stream()),
+                        inscriptionTargets.stream()
+                    ).collect(Collectors.toList());
+                    
+                    boolean isMatch = ItemMatcher.matchesWithNbt(item, allTargets);
+                    
+                    if (isMatch) {
+                        foundMatch = true;
+                        break;
+                    }
                 }
                 
-                ItemStack centerItem = centerTrade.getA();
-                
-                var allTargets = Stream.concat(
-                    Stream.concat(generalTargets.stream(), boosterPackTargets.stream()),
-                    inscriptionTargets.stream()
-                ).collect(Collectors.toList());
-                
-                boolean isMatch = ItemMatcher.matchesWithNbt(centerItem, allTargets);
-                
-                if (isMatch) {
+                if (foundMatch) {
                     stop();
                     return;
                 }

@@ -14,6 +14,7 @@ public class AutoRerollConfig {
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> INSCRIPTION_TARGETS;
     public static final ForgeConfigSpec.IntValue MAX_REROLLS;
     public static final ForgeConfigSpec.IntValue PAUSE_BETWEEN_REROLLS_MS;
+    public static final ForgeConfigSpec.BooleanValue SEARCH_ALL_SLOTS;
 
     static {
         CLIENT_BUILDER.push("auto_reroll");
@@ -61,6 +62,10 @@ public class AutoRerollConfig {
         PAUSE_BETWEEN_REROLLS_MS = CLIENT_BUILDER
             .comment("Pause between rerolls in milliseconds (0 = disabled, recommended for normal use)")
             .defineInRange("pauseBetweenRerollsMs", 0, 0, Integer.MAX_VALUE);
+
+        SEARCH_ALL_SLOTS = CLIENT_BUILDER
+            .comment("Search all 3 trade slots instead of only the center slot")
+            .define("searchAllSlots", false);
 
         CLIENT_BUILDER.pop();
         CLIENT_SPEC = CLIENT_BUILDER.build();
