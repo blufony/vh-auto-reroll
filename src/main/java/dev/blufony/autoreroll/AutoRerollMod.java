@@ -9,13 +9,13 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
 @Mod(AutoRerollMod.MOD_ID)
 public class AutoRerollMod {
-    public static final String MOD_ID = "auto_reroll";
+    public static final String MOD_ID = "vh_auto_reroll";
     
     public AutoRerollMod() {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::setup);
         
         ModLoadingContext.get()
-            .registerConfig(ModConfig.Type.CLIENT, AutoRerollConfig.CLIENT_SPEC, "auto_reroll-client.toml");
+            .registerConfig(ModConfig.Type.CLIENT, AutoRerollConfig.CLIENT_SPEC, "vh_auto_reroll-client.toml");
     }
     
     private void setup(final FMLCommonSetupEvent event) {

@@ -26,7 +26,7 @@ public class FilterStorage {
     private static boolean cacheLoaded = false;
     
     private static Path getFilterPath() {
-        return Paths.get("config", "auto_reroll", "filter.json");
+        return Paths.get("config", "vh_auto_reroll", "filter.json");
     }
     
     public static Optional<ItemStack> loadFilterItem() {

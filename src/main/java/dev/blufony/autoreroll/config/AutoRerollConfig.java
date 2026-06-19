@@ -11,7 +11,7 @@ public class AutoRerollConfig {
     public static final ForgeConfigSpec.BooleanValue SEARCH_ALL_SLOTS;
 
     static {
-        CLIENT_BUILDER.push("auto_reroll");
+        CLIENT_BUILDER.push("vh_auto_reroll");
 
         MAX_REROLLS = CLIENT_BUILDER
             .comment("Maximum number of rerolls before giving up")
