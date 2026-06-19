@@ -86,6 +86,7 @@ dependencies {
     implementation fg.deobf("curse.maven:vault-hunters-official-mod-458203:7952001")
     implementation fg.deobf("curse.maven:vault-filters-952507:7318439")
     implementation fg.deobf("curse.maven:create-328085:4835188")
+    implementation fg.deobf("curse.maven:jei-238222:5846864")
 
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
 }
