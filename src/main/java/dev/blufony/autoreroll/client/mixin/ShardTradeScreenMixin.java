@@ -319,7 +319,9 @@ public abstract class ShardTradeScreenMixin {
                 if (AutoRerollManager.isRunning()) {
                     return new TextComponent("Stop Auto-Reroll");
                 }
-                return new TextComponent("Start Auto-Reroll");
+                return AutoRerollConfig.AUTO_BUY.get()
+                    ? new TextComponent("Start Auto-Reroll (Auto-Buy Enabled)")
+                    : new TextComponent("Start Auto-Reroll");
             });
             
             ((IconButtonElement) store.addElement(autoRerollButton))
