@@ -8,6 +8,7 @@ public class AutoRerollConfig {
 
     public static final ForgeConfigSpec.IntValue MAX_REROLLS;
     public static final ForgeConfigSpec.BooleanValue SEARCH_ALL_SLOTS;
+    public static final ForgeConfigSpec.BooleanValue AUTO_BUY;
 
     static {
         CLIENT_BUILDER.push("vh_auto_reroll");
@@ -19,6 +20,11 @@ public class AutoRerollConfig {
         SEARCH_ALL_SLOTS = CLIENT_BUILDER
             .comment("Search all 3 trade slots instead of only the center slot")
             .define("searchAllSlots", true);
+
+        AUTO_BUY = CLIENT_BUILDER
+            .comment("Automatically buy matched items from the Black Market",
+                     "If purchase fails (e.g. insufficient shards), auto-reroll stops")
+            .define("autoBuy", false);
 
         CLIENT_BUILDER.pop();
         CLIENT_SPEC = CLIENT_BUILDER.build();
