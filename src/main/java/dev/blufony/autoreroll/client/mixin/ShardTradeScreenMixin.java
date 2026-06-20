@@ -5,6 +5,7 @@ import dev.blufony.autoreroll.client.AutoRerollManager;
 import dev.blufony.autoreroll.config.AutoRerollConfig;
 import dev.blufony.autoreroll.client.gui.IconButtonElement;
 import dev.blufony.autoreroll.client.gui.SlotTargetToggle;
+import dev.blufony.autoreroll.client.gui.AutoBuyToggle;
 import dev.blufony.autoreroll.util.FilterStorage;
 import dev.blufony.autoreroll.util.ItemMatcher;
 import dev.blufony.autoreroll.util.NotifyUtil;
@@ -194,6 +195,7 @@ public abstract class ShardTradeScreenMixin {
             addAutoRerollButton(store, resetButton);
             addFilterSlot(store);
             addSlotTargetToggle(store);
+            addAutoBuyToggle(store);
             
         } catch (Exception e) {
             System.err.println("[AutoReroll] Error during button modification: " + e.getMessage());
@@ -457,6 +459,52 @@ public abstract class ShardTradeScreenMixin {
             
         } catch (Exception e) {
             System.err.println("[AutoReroll] Error adding slot target toggle: " + e.getMessage());
+        }
+    }
+    
+    private void addAutoBuyToggle(ElementStore store) {
+        try {
+            if (!hasInfiniteRerollPrestige()) {
+                return;
+            }
+            
+            int toggleX = 29;
+            int toggleY = 90;
+            
+            AutoBuyToggle toggle = new AutoBuyToggle(
+                Spatials.positionXY(toggleX, toggleY),
+                () -> {}
+            );
+            
+            AutoBuyToggle finalToggle = toggle;
+            
+            try {
+                ON_CLICK_FIELD.set(toggle, (Consumer<ButtonElement<?>>) btn -> {
+                    boolean newMode = !finalToggle.isAutoBuy();
+                    finalToggle.setAutoBuy(newMode);
+                    AutoRerollConfig.AUTO_BUY.set(newMode);
+                    AutoRerollConfig.CLIENT_SPEC.save();
+                });
+            } catch (Exception e) {
+                System.err.println("[AutoReroll] Failed to set auto-buy toggle click handler: " + e.getMessage());
+                return;
+            }
+            
+            toggle.tooltip(() -> {
+                if (!hasInfiniteRerollPrestige()) {
+                    return new TextComponent("Unlock Whispers of the Market Prestige");
+                }
+                
+                return finalToggle.isAutoBuy()
+                    ? new TextComponent("Auto-Buy On")
+                    : new TextComponent("Auto-Buy Off");
+            });
+            
+            ((AutoBuyToggle) store.addElement(toggle))
+                .layout((screen, gui, parent, world) -> world.translateXY(gui));
+            
+        } catch (Exception e) {
+            System.err.println("[AutoReroll] Error adding auto-buy toggle: " + e.getMessage());
         }
     }
     
