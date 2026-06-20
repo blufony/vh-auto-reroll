@@ -6,34 +6,24 @@ import dev.blufony.autoreroll.util.ItemMatcher;
 import dev.blufony.autoreroll.util.NotifyUtil;
 import iskallia.vault.network.message.ShardTradeMessage;
 import net.minecraft.client.Minecraft;
-import net.minecraft.network.chat.TextComponent;
+
 import net.minecraft.util.Tuple;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.common.Mod;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
-@Mod.EventBusSubscriber(modid = "vh_auto_reroll", bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
+@Mod.EventBusSubscriber(modid = "vh_auto_reroll", bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class AutoRerollManager {
     private static final org.apache.logging.log4j.Logger LOGGER = org.apache.logging.log4j.LogManager.getLogger();
     
     private static boolean isRunning = false;
     private static int currentRerollCount = 0;
-    private static boolean cancelRequested = false;
     private static Optional<ItemStack> filterItemStack = Optional.empty();
     private static boolean filterIsSimpleMode = false;
     private static Runnable resumeHandler;
-    private static long pauseBetweenRerollsMs;
-    private static ScheduledExecutorService scheduler;
 
     public static synchronized void start(Runnable onResume) {
         if (isRunning) {
@@ -46,20 +36,10 @@ public class AutoRerollManager {
             return;
         }
         
-        ensureSchedulerShutdown();
-        
         resumeHandler = onResume;
-        pauseBetweenRerollsMs = AutoRerollConfig.PAUSE_BETWEEN_REROLLS_MS.get();
         isRunning = true;
         currentRerollCount = 0;
-        cancelRequested = false;
         filterIsSimpleMode = FilterStorage.isFilterSimpleMode();
-        
-        scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
-            Thread t = new Thread(runnable, "auto-reroll-scheduler");
-            t.setDaemon(true);
-            return t;
-        });
         
         LOGGER.info("Auto-reroll started with {} filter: {}", filterIsSimpleMode ? "simple" : "Create filter", filterItemStack.get().getItem());
     }
@@ -69,12 +49,9 @@ public class AutoRerollManager {
             return;
         }
         
-        cancelRequested = true;
         isRunning = false;
         int finalCount = currentRerollCount;
         currentRerollCount = 0;
-        
-        ensureSchedulerShutdown();
         
         if (resumeHandler != null) {
             resumeHandler.run();
@@ -84,32 +61,12 @@ public class AutoRerollManager {
         LOGGER.info("Auto-reroll stopped after {} rerolls", finalCount);
     }
     
-    private static synchronized void ensureSchedulerShutdown() {
-        if (scheduler != null) {
-            List<Runnable> cancelledTasks = scheduler.shutdownNow();
-            try {
-                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
-                    scheduler.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                scheduler.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-            scheduler = null;
-        }
-    }
-    
     private static void sendResetRequest() {
-        if (cancelRequested || !isRunning) {
+        if (!isRunning) {
             return;
         }
         
         currentRerollCount++;
-        
-        if (currentRerollCount > 1 && pauseBetweenRerollsMs > 0) {
-            scheduler.schedule(() -> sendResetRequest(), pauseBetweenRerollsMs, TimeUnit.MILLISECONDS);
-            return;
-        }
         
         iskallia.vault.init.ModNetwork.CHANNEL.sendToServer(
             iskallia.vault.network.message.ServerboundResetBlackMarketTradesMessage.INSTANCE
@@ -117,74 +74,58 @@ public class AutoRerollManager {
     }
     
     public static synchronized void onServerResponse(ShardTradeMessage message) {
-        if (cancelRequested || !isRunning || filterItemStack.isEmpty()) {
+        if (!isRunning || filterItemStack.isEmpty()) {
             return;
         }
         
         Map<Integer, Tuple<ItemStack, Integer>> availableTrades = message.getAvailableTrades();
         Level level = Minecraft.getInstance().level;
         
-        scheduler.schedule(() -> {
-            if (cancelRequested || !isRunning || filterItemStack.isEmpty()) {
-                return;
+        boolean searchAllSlots = AutoRerollConfig.SEARCH_ALL_SLOTS.get();
+        int[] slotsToCheck = searchAllSlots ? new int[]{0, 1, 2} : new int[]{1};
+        
+        boolean foundMatch = false;
+        
+        for (int slotIndex : slotsToCheck) {
+            Tuple<ItemStack, Integer> trade = availableTrades.get(slotIndex);
+            
+            if (trade == null) {
+                continue;
             }
             
-            try {
-                boolean searchAllSlots = AutoRerollConfig.SEARCH_ALL_SLOTS.get();
-                int[] slotsToCheck = searchAllSlots ? new int[]{0, 1, 2} : new int[]{1};
-                
-                boolean foundMatch = false;
-                
-                for (int slotIndex : slotsToCheck) {
-                    Tuple<ItemStack, Integer> trade = availableTrades.get(slotIndex);
-                    
-                    if (trade == null) {
-                        continue;
-                    }
-                    
-                    ItemStack item = trade.getA();
-                    
-                    if (filterIsSimpleMode) {
-                        if (ItemMatcher.matchesByItemId(item, filterItemStack.get())) {
-                            foundMatch = true;
-                            break;
-                        }
-                    } else if (ItemMatcher.matchesWithFilter(item, filterItemStack.get(), level)) {
-                        foundMatch = true;
-                        break;
-                    }
+            ItemStack item = trade.getA();
+            
+            if (filterIsSimpleMode) {
+                if (ItemMatcher.matchesByItemId(item, filterItemStack.get())) {
+                    foundMatch = true;
+                    break;
                 }
-                
-                if (foundMatch) {
-                    LOGGER.info("Found matching trade after {} rerolls", currentRerollCount);
-                    NotifyUtil.notifyPlayer(
-                        "[AutoReroll] Auto-Reroll Succeeded!",
-                        iskallia.vault.init.ModSounds.VAULT_CHEST_OMEGA_OPEN
-                    );
-                    stop();
-                    return;
-                }
-                
-                if (currentRerollCount >= AutoRerollConfig.MAX_REROLLS.get()) {
-                    LOGGER.info("Max rerolls ({}) reached without finding match", AutoRerollConfig.MAX_REROLLS.get());
-                    NotifyUtil.notifyPlayer(
-                        "[AutoReroll] Failed to find target after " + AutoRerollConfig.MAX_REROLLS.get() + " rerolls",
-                        iskallia.vault.init.ModSounds.BOOSTER_PACK_FAIL_SFX
-                    );
-                    stop();
-                    return;
-                }
-                
-                scheduleNextCycle();
-                
-            } catch (Exception e) {
-                LOGGER.error("Exception during trade check:", e);
-                stop();
+            } else if (ItemMatcher.matchesWithFilter(item, filterItemStack.get(), level)) {
+                foundMatch = true;
+                break;
             }
-        }, pauseBetweenRerollsMs, TimeUnit.MILLISECONDS);
-    }
-    
-    private static void scheduleNextCycle() {
+        }
+        
+        if (foundMatch) {
+            LOGGER.info("Found matching trade after {} rerolls", currentRerollCount);
+            NotifyUtil.notifyPlayer(
+                "[AutoReroll] Auto-Reroll Succeeded!",
+                iskallia.vault.init.ModSounds.VAULT_CHEST_OMEGA_OPEN
+            );
+            stop();
+            return;
+        }
+        
+        if (currentRerollCount >= AutoRerollConfig.MAX_REROLLS.get()) {
+            LOGGER.info("Max rerolls ({}) reached without finding match", AutoRerollConfig.MAX_REROLLS.get());
+            NotifyUtil.notifyPlayer(
+                "[AutoReroll] Failed to find target after " + AutoRerollConfig.MAX_REROLLS.get() + " rerolls",
+                iskallia.vault.init.ModSounds.BOOSTER_PACK_FAIL_SFX
+            );
+            stop();
+            return;
+        }
+        
         sendResetRequest();
     }
     
