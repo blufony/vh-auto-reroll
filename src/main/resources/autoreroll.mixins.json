@@ -7,7 +7,10 @@
   ],
   "client": [
     "ShardTradeMessageMixin",
-    "ShardTradeScreenMixin"
+    "ShardTradeScreenMixin",
+    "BountyTableContainerElementMixin",
+    "BountyTableContainerElementInvoker",
+    "ClientboundRefreshBountiesMessageMixin"
   ],
   "minVersion": "0.8"
 }

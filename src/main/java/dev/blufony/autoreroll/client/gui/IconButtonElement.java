@@ -2,6 +2,7 @@ package dev.blufony.autoreroll.client.gui;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.blufony.autoreroll.client.AutoRerollManager;
+import dev.blufony.autoreroll.client.BountyAutoRerollManager;
 import iskallia.vault.client.atlas.TextureAtlasRegion;
 import iskallia.vault.client.gui.framework.element.ButtonElement;
 import iskallia.vault.client.gui.framework.render.spi.IElementRenderer;
@@ -34,7 +35,7 @@ public class IconButtonElement extends ButtonElement<IconButtonElement> {
         
         TextureAtlasRegion iconToRender = null;
         
-        if (this.activeIconSupplier != null && AutoRerollManager.isRunning()) {
+        if (this.activeIconSupplier != null && (AutoRerollManager.isRunning() || BountyAutoRerollManager.isRunning())) {
             iconToRender = this.activeIconSupplier.get();
         } else if (this.iconSupplier != null) {
             iconToRender = this.iconSupplier.get();
