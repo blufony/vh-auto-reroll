@@ -1,3 +1,8 @@
+## 0.1.3
+
+- add bounty table auto rerolling
+- refactor of black market mixins
+
 ## 0.1.2
 
 - add jei integration
