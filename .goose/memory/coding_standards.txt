@@ -1,0 +1,6 @@
+# architecture state-management
+There should always only be one single source of truth for state (e.g., config values drive GUI toggle widgets; widgets never cache or duplicate state).
+
+# minecraft-modding mixins
+Prefer @Accessor mixin on the declaring class for inherited fields — @Shadow only resolves fields declared in the mixin's direct target class.
+

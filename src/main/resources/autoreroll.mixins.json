@@ -8,6 +8,8 @@
   "client": [
     "ShardTradeMessageMixin",
     "ShardTradeScreenMixin",
+    "ButtonElementAccessor",
+    "AbstractElementContainerScreenAccessor",
     "BountyTableContainerElementMixin",
     "BountyTableContainerElementInvoker",
     "ClientboundRefreshBountiesMessageMixin"

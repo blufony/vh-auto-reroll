@@ -2,10 +2,10 @@ package dev.blufony.autoreroll.client.mixin;
 
 import dev.blufony.autoreroll.AutoRerollMod;
 import dev.blufony.autoreroll.client.AutoRerollManager;
-import dev.blufony.autoreroll.config.AutoRerollConfig;
+import dev.blufony.autoreroll.client.gui.AutoBuyToggle;
 import dev.blufony.autoreroll.client.gui.IconButtonElement;
 import dev.blufony.autoreroll.client.gui.SlotTargetToggle;
-import dev.blufony.autoreroll.client.gui.AutoBuyToggle;
+import dev.blufony.autoreroll.config.AutoRerollConfig;
 import dev.blufony.autoreroll.util.FilterStorage;
 import dev.blufony.autoreroll.util.ItemMatcher;
 import dev.blufony.autoreroll.util.NotifyUtil;
@@ -13,14 +13,15 @@ import com.simibubi.create.foundation.config.ui.ConfigScreen;
 import com.simibubi.create.foundation.config.ui.SubMenuConfigScreen;
 import iskallia.vault.VaultMod;
 import iskallia.vault.client.atlas.TextureAtlasRegion;
-import iskallia.vault.client.data.ClientExpertiseData;
 import iskallia.vault.client.data.ClientShardTradeData;
+import iskallia.vault.client.gui.framework.ScreenTextures;
 import iskallia.vault.client.gui.framework.element.ButtonElement;
 import iskallia.vault.client.gui.framework.element.FakeItemSlotElement;
 import iskallia.vault.client.gui.framework.element.spi.ElementStore;
-import iskallia.vault.client.gui.framework.render.Tooltips;
 import iskallia.vault.client.gui.framework.render.TooltipDirection;
+import iskallia.vault.client.gui.framework.render.Tooltips;
 import iskallia.vault.client.gui.framework.spatial.Spatials;
+import iskallia.vault.client.gui.framework.screen.AbstractElementContainerScreen;
 import iskallia.vault.container.inventory.ShardTradeContainer;
 import iskallia.vault.init.ModNetwork;
 import iskallia.vault.init.ModSounds;
@@ -46,111 +47,35 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.List;
 import java.util.function.Consumer;
 
 @Mixin(value = iskallia.vault.client.gui.screen.ShardTradeScreen.class, priority = 1000)
 public abstract class ShardTradeScreenMixin {
-    private static Field ELEMENT_STORE_FIELD;
-    private static Field ON_CLICK_FIELD;
-    private static Field TEXTURES_FIELD;
-    private static Method WORLD_SPATIAL_X_METHOD;
-    private static Method WORLD_SPATIAL_Y_METHOD;
-    private static Object RESET_TRADES_TEXTURES;
-    private static ButtonElement.ButtonTextures AUTO_REROLL_BUTTON_TEXTURES;
-    
-    // Define the auto-reroll button textures using Vault's blue button
-    static {
-        try {
-        // Create blue button texture regions (with .9 suffix for nine-slice)
-        TextureAtlasRegion BLUE_BUTTON_NORMAL = TextureAtlasRegion.of(
-            ModTextureAtlases.SCREEN, 
-            VaultMod.id("gui/screen/button/blue/normal.9")
-        );
-        TextureAtlasRegion BLUE_BUTTON_HOVER = TextureAtlasRegion.of(
-            ModTextureAtlases.SCREEN, 
-            VaultMod.id("gui/screen/button/blue/hover.9")
-        );
-        TextureAtlasRegion BLUE_BUTTON_PRESSED = TextureAtlasRegion.of(
-            ModTextureAtlases.SCREEN, 
-            VaultMod.id("gui/screen/button/blue/pressed.9")
-        );
-        TextureAtlasRegion BLUE_BUTTON_DISABLED = TextureAtlasRegion.of(
-            ModTextureAtlases.SCREEN, 
-            VaultMod.id("gui/screen/button/blue/disabled.9")
-        );
-        
-        AUTO_REROLL_BUTTON_TEXTURES = new ButtonElement.ButtonTextures(
-            BLUE_BUTTON_NORMAL,
-            BLUE_BUTTON_HOVER,
 
-            BLUE_BUTTON_PRESSED,
-            BLUE_BUTTON_DISABLED
-        );
+    // Auto-reroll button textures using Vault's blue button
+    private static final ButtonElement.ButtonTextures AUTO_REROLL_BUTTON_TEXTURES = new ButtonElement.ButtonTextures(
+        TextureAtlasRegion.of(ModTextureAtlases.SCREEN, VaultMod.id("gui/screen/button/blue/normal.9")),
+        TextureAtlasRegion.of(ModTextureAtlases.SCREEN, VaultMod.id("gui/screen/button/blue/hover.9")),
+        TextureAtlasRegion.of(ModTextureAtlases.SCREEN, VaultMod.id("gui/screen/button/blue/pressed.9")),
+        TextureAtlasRegion.of(ModTextureAtlases.SCREEN, VaultMod.id("gui/screen/button/blue/disabled.9"))
+    );
 
-
-        } catch (Exception e) {
-            System.err.println("[AutoReroll] Failed to create button textures: " + e.getMessage());
-        }
-    }
-    
     // Cycle icon overlay
     private static final TextureAtlasRegion CYCLE_ICON = TextureAtlasRegion.of(
-        ModTextureAtlases.SCREEN, 
+        ModTextureAtlases.SCREEN,
         VaultMod.id("gui/screen/button/cycle")
     );
-    
-    static {
-        try {
-            Minecraft mc = Minecraft.getInstance();
-            Class<?> clazz = iskallia.vault.client.gui.screen.ShardTradeScreen.class;
-            
-            while (clazz != null && ELEMENT_STORE_FIELD == null) {
-                try {
-                    ELEMENT_STORE_FIELD = clazz.getDeclaredField("elementStore");
-                } catch (NoSuchFieldException e) {
-                    clazz = clazz.getSuperclass();
-                }
-            }
-            
-            if (ELEMENT_STORE_FIELD != null) {
-                ELEMENT_STORE_FIELD.setAccessible(true);
-            }
-            
-            TEXTURES_FIELD = ButtonElement.class.getDeclaredField("textures");
-            TEXTURES_FIELD.setAccessible(true);
-            
-            Class<?> worldSpatialClass = ButtonElement.class.getSuperclass();
-            Field worldSpatialField = worldSpatialClass.getDeclaredField("worldSpatial");
-            worldSpatialField.setAccessible(true);
-            
-            WORLD_SPATIAL_X_METHOD = worldSpatialClass.getMethod("x");
-            WORLD_SPATIAL_Y_METHOD = worldSpatialClass.getMethod("y");
-            
-            ON_CLICK_FIELD = ButtonElement.class.getDeclaredField("onClick");
-            ON_CLICK_FIELD.setAccessible(true);
-            
-            // Get the reset button textures constant reference
-            Class<?> screenTexturesClass = Class.forName("iskallia.vault.client.gui.framework.ScreenTextures");
-            RESET_TRADES_TEXTURES = screenTexturesClass.getField("BUTTON_RESET_TRADES_TEXTURES").get(null);
-            
-        } catch (Exception e) {
-            System.err.println("[AutoReroll] Failed to initialize cached reflection fields: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
+
+    private static final TextureAtlasRegion CYCLE_ICON_ACTIVE = TextureAtlasRegion.of(
+        ModTextureAtlases.SCREEN,
+        VaultMod.id("gui/screen/button/cycle_highlight")
+    );
     
     @Inject(method = "<init>", at = @At("RETURN"))
     private void onInit(ShardTradeContainer container, Inventory inventory, Component title, CallbackInfo ci) {
-        if (ELEMENT_STORE_FIELD == null) {
-            System.err.println("[AutoReroll] elementStore field not found - auto-reroll disabled");
-            return;
-        }
-        
         try {
-            ElementStore store = (ElementStore) ELEMENT_STORE_FIELD.get(this);
+            ElementStore store = ((AbstractElementContainerScreenAccessor) this).autoreroll$getElementStore();
             
             if (store == null) {
                 System.err.println("[AutoReroll] ElementStore is null");
@@ -158,39 +83,22 @@ public abstract class ShardTradeScreenMixin {
             }
             
             var guiElements = store.getGuiEventElementList();
-            int resetButtonIndex = -1;
+            ButtonElement<?> resetButton = null;
             
-            for (int i = 0; i < guiElements.size(); i++) {
-                var element = guiElements.get(i);
-                
-                if (!(element instanceof ButtonElement<?>)) {
-                    continue;
-                }
-                
-                ButtonElement<?> btn = (ButtonElement<?>) element;
-                boolean isResetButton = false;
-                
-                try {
-                    Object textures = TEXTURES_FIELD.get(btn);
-                    if (RESET_TRADES_TEXTURES != null && textures == RESET_TRADES_TEXTURES) {
-                        isResetButton = true;
-                    }
-                } catch (Exception e) {
-                    // Skip if we can't check textures
-                }
-                
-                if (isResetButton) {
-                    resetButtonIndex = i;
+            // Identify the vanilla reset button by its texture set (no reflection).
+            for (var element : guiElements) {
+                if (element instanceof ButtonElement<?> btn
+                    && ((ButtonElementAccessor) btn).autoreroll$getTextures() == ScreenTextures.BUTTON_RESET_TRADES_TEXTURES) {
+                    resetButton = btn;
                     break;
                 }
             }
             
-            if (resetButtonIndex == -1) {
+            if (resetButton == null) {
                 System.err.println("[AutoReroll] Reset button not found");
                 return;
             }
             
-            ButtonElement<?> resetButton = (ButtonElement<?>) guiElements.get(resetButtonIndex);
             modifyButtonClick(resetButton);
             addAutoRerollButton(store, resetButton);
             addFilterSlot(store);
@@ -204,7 +112,7 @@ public abstract class ShardTradeScreenMixin {
     
     private boolean modifyButtonClick(ButtonElement<?> button) {
         try {
-            Consumer<ButtonElement<?>> originalOnClick = (Consumer<ButtonElement<?>>) ON_CLICK_FIELD.get(button);
+            Consumer<ButtonElement<?>> originalOnClick = ((ButtonElementAccessor) button).autoreroll$getOnClick();
             
             if (originalOnClick == null) {
                 return false;
@@ -222,15 +130,10 @@ public abstract class ShardTradeScreenMixin {
                 }
             };
             
-            ON_CLICK_FIELD.set(button, wrappedOnClick);
-            
-
+            ((ButtonElementAccessor) button).autoreroll$setOnClick(wrappedOnClick);
             
             return true;
             
-        } catch (IllegalAccessException e) {
-            System.err.println("[AutoReroll] Cannot access onClick field: " + e.getMessage());
-            return false;
         } catch (Exception e) {
             System.err.println("[AutoReroll] Error modifying button: " + e.getMessage());
             return false;
@@ -244,8 +147,8 @@ public abstract class ShardTradeScreenMixin {
                 return;
             }
             
-            int resetX = (int) WORLD_SPATIAL_X_METHOD.invoke(resetButton);
-            int resetY = (int) WORLD_SPATIAL_Y_METHOD.invoke(resetButton);
+            int resetX = resetButton.getWorldSpatial().x();
+            int resetY = resetButton.getWorldSpatial().y();
 
             int autoRerollX = resetX + 21;
             int autoRerollY = resetY + 2;
@@ -298,10 +201,7 @@ public abstract class ShardTradeScreenMixin {
             autoRerollButton.setDisabled(() -> !hasInfiniteRerollPrestige() || !hasFilterItem());
             
             autoRerollButton.icon(() -> CYCLE_ICON);
-            autoRerollButton.activeIcon(() -> TextureAtlasRegion.of(
-                ModTextureAtlases.SCREEN, 
-                VaultMod.id("gui/screen/button/cycle_highlight")
-            ));
+            autoRerollButton.activeIcon(() -> CYCLE_ICON_ACTIVE);
             
             autoRerollButton.tooltip(() -> {
                 Minecraft mc = Minecraft.getInstance();
@@ -401,16 +301,14 @@ public abstract class ShardTradeScreenMixin {
             ButtonElement<?> omegaButton = null;
             
             for (var element : guiElements) {
-                if (!(element instanceof ButtonElement<?>)) {
-                    continue;
-                }
-                
-                int btnX = (int) WORLD_SPATIAL_X_METHOD.invoke(element);
-                int btnY = (int) WORLD_SPATIAL_Y_METHOD.invoke(element);
-                
-                if (btnX >= 75 && btnX <= 80 && btnY >= 40 && btnY <= 46) {
-                    omegaButton = (ButtonElement<?>) element;
-                    break;
+                if (element instanceof ButtonElement<?> button) {
+                    int btnX = button.getWorldSpatial().x();
+                    int btnY = button.getWorldSpatial().y();
+                    
+                    if (btnX >= 75 && btnX <= 80 && btnY >= 40 && btnY <= 46) {
+                        omegaButton = button;
+                        break;
+                    }
                 }
             }
             
@@ -419,30 +317,19 @@ public abstract class ShardTradeScreenMixin {
                 return;
             }
             
-            int centerX = (int) WORLD_SPATIAL_X_METHOD.invoke(omegaButton);
-            int centerY = (int) WORLD_SPATIAL_Y_METHOD.invoke(omegaButton);
+            int centerX = omegaButton.getWorldSpatial().x();
+            int centerY = omegaButton.getWorldSpatial().y();
             
             int toggleX = centerX - 14;
             int toggleY = centerY + 5;
             
             SlotTargetToggle toggle = new SlotTargetToggle(
                 Spatials.positionXY(toggleX, toggleY),
-                () -> {}
-            );
-            
-            SlotTargetToggle finalToggle = toggle;
-            
-            try {
-                ON_CLICK_FIELD.set(toggle, (Consumer<ButtonElement<?>>) btn -> {
-                    boolean newMode = !finalToggle.isOmegaOnly();
-                    finalToggle.setOmegaOnly(newMode);
-                    AutoRerollConfig.SEARCH_ALL_SLOTS.set(!newMode);
+                () -> {
+                    AutoRerollConfig.SEARCH_ALL_SLOTS.set(!AutoRerollConfig.SEARCH_ALL_SLOTS.get());
                     AutoRerollConfig.CLIENT_SPEC.save();
-                });
-            } catch (Exception e) {
-                System.err.println("[AutoReroll] Failed to set toggle click handler: " + e.getMessage());
-                return;
-            }
+                }
+            );
             
             toggle.tooltip(() -> {
                 if (!hasInfiniteRerollPrestige()) {
@@ -473,29 +360,19 @@ public abstract class ShardTradeScreenMixin {
             
             AutoBuyToggle toggle = new AutoBuyToggle(
                 Spatials.positionXY(toggleX, toggleY),
-                () -> {}
-            );
-            
-            AutoBuyToggle finalToggle = toggle;
-            
-            try {
-                ON_CLICK_FIELD.set(toggle, (Consumer<ButtonElement<?>>) btn -> {
-                    boolean newMode = !finalToggle.isAutoBuy();
-                    finalToggle.setAutoBuy(newMode);
+                () -> {
+                    boolean newMode = !AutoRerollConfig.AUTO_BUY.get();
                     AutoRerollConfig.AUTO_BUY.set(newMode);
                     AutoRerollConfig.CLIENT_SPEC.save();
-                });
-            } catch (Exception e) {
-                System.err.println("[AutoReroll] Failed to set auto-buy toggle click handler: " + e.getMessage());
-                return;
-            }
+                }
+            );
             
             toggle.tooltip(() -> {
                 if (!hasInfiniteRerollPrestige()) {
                     return new TextComponent("Unlock Whispers of the Market Prestige");
                 }
                 
-                return finalToggle.isAutoBuy()
+                return AutoRerollConfig.AUTO_BUY.get()
                     ? new TextComponent("Auto-Buy On")
                     : new TextComponent("Auto-Buy Off");
             });
